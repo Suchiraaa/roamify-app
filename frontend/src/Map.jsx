@@ -140,7 +140,6 @@ export default function Map({ routeGeoJson }) {
         fitMapToBounds(routeGeoJson.geometry.coordinates);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeGeoJson]);
 
   return (
