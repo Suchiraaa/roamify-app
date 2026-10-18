@@ -3,7 +3,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
 // Insert your Mapbox Public Token here
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_PUBLIC_TOKEN;
+mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_TOKEN;
 
 export default function Map({ routeGeoJson }) {
   const mapContainer = useRef(null);
