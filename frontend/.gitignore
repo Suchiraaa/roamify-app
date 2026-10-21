@@ -26,6 +26,3 @@ dist-ssr
 .env.local
 .env.*
 !.env.example
-*.kilo
-.kilocodeignore
-kilo.jsonc
