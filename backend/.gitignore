@@ -1,0 +1,16 @@
+@"
+# API keys and environment variables
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node.js
+node_modules/
+"@ | Set-Content -Path .gitignore
