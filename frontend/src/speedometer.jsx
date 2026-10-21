@@ -1,54 +1,75 @@
+
 import { useState, useEffect } from 'react'
+import './Roamify.css'
 
 function Speedometer() {
   const [speed, setSpeed] = useState(null)
-  const [error, setError] = useState(null)
+  const [status, setStatus] = useState('Waiting for location')
 
   useEffect(() => {
     if (!navigator.geolocation) {
-      setError('Geolocation not supported on this device')
+      setStatus('Location is not supported')
       return
     }
 
     const watcher = navigator.geolocation.watchPosition(
       (position) => {
         const speedMs = position.coords.speed
-        if (speedMs !== null) {
-          const speedKmh = (speedMs * 3.6).toFixed(1)
-          setSpeed(speedKmh)
+
+        if (speedMs !== null && Number.isFinite(speedMs)) {
+          setSpeed((speedMs * 3.6).toFixed(1))
+          setStatus('GPS connected')
         } else {
-          setSpeed(0)
+          setSpeed(null)
+          setStatus('Speed data unavailable')
         }
       },
-      (err) => setError('Location permission denied'),
-      { enableHighAccuracy: true }
+      (err) => {
+        setSpeed(null)
+        setStatus(
+          err.code === 1
+            ? 'Location permission denied'
+            : 'Unable to get location'
+        )
+      },
+      {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 10000,
+      }
     )
 
     return () => navigator.geolocation.clearWatch(watcher)
   }, [])
 
   return (
-    <div style={{
-      background: '#1a1a2e',
-      color: 'white',
-      borderRadius: '12px',
-      padding: '20px',
-      textAlign: 'center',
-      width: '200px',
-      margin: '20px auto'
-    }}>
-      <h3 style={{ margin: 0, color: '#888' }}>SPEED</h3>
-      {error ? (
-        <p style={{ color: 'red', fontSize: '14px' }}>{error}</p>
-      ) : (
-        <>
-          <p style={{ fontSize: '48px', fontWeight: 'bold', margin: '10px 0' }}>
-            {speed ?? '—'}
-          </p>
-          <p style={{ color: '#888', margin: 0 }}>km/h</p>
-        </>
-      )}
-    </div>
+    <section className="speed-card">
+      <div className="speed-card-header">
+        <div>
+          <p className="eyebrow">LIVE TELEMETRY</p>
+          <h2>Current Speed</h2>
+        </div>
+
+        <span className="live-indicator">
+          <span className="status-dot" />
+          LIVE
+        </span>
+      </div>
+
+      <div className="speed-reading">
+        <span className="speed-value">
+          {speed ?? '--'}
+        </span>
+        <span className="speed-unit">km/h</span>
+      </div>
+
+      <div className="speed-divider" />
+
+      <div className="speed-footer">
+        <span className="status-dot" />
+        <p>{status}</p>
+      </div>
+    </section>
   )
 }
 
