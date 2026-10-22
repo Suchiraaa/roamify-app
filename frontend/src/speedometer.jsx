@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react'
-import './Roamify.css'
+import "./App.css";
 
 function Speedometer() {
   const [speed, setSpeed] = useState(null)

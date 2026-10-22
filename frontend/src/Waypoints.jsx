@@ -2,7 +2,7 @@
 import { useEffect, useRef } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
-import './Roamify.css'
+import "./App.css";
 
 const waypoints = [
   { id: 1, name: 'Start Point', lat: 40.7128, lng: -74.0060 },

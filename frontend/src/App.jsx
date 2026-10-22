@@ -4,7 +4,8 @@ import reactLogo from './assets/react.svg'
 import viteLogo from './assets/vite.svg'
 import './App.css'
 import Waypoints from './Waypoints'
-import Speedometer from './Speedometer'
+import Speedometer from './speedometer.jsx'
+import NearbyPlaces from './NearbyPlaces.jsx'
 
 function App() {
   const [count, setCount] = useState(0)
@@ -33,6 +34,7 @@ function App() {
       </section>
       <Waypoints />
       <Speedometer />
+      <NearbyPlaces />
 
       <div className="ticks"></div>
 
