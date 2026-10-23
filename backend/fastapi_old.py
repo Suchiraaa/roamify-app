@@ -1,5 +1,5 @@
 
-from fastapi.cpython import FastAPI
+from fastapi import FastAPI
 
 app = FastAPI()
 
