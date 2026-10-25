@@ -8,6 +8,8 @@ dist-ssr/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
 
 # Python / Backend
 __pycache__/
@@ -22,11 +24,19 @@ ENV/
 backend/venv/
 backend/.venv/
 
-# Environment Variables & Secrets
+# Environment Variables & Secrets - never commit real tokens
 .env
-backend/.env
-frontend/.env
+.env.*
+*.env
+*.env.*
 *.env.local
+backend/.env
+backend/.env.*
+frontend/.env
+frontend/.env.*
+!.env.example
+!backend/.env.example
+!frontend/.env.example
 
 # IDEs & OS
 .vscode/

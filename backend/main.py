@@ -1,10 +1,14 @@
 import os
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 
-# Load environment variables from .env
+# Load environment variables reliably from backend/.env and parent
+backend_dir = Path(__file__).resolve().parent
+load_dotenv(backend_dir / ".env")
+load_dotenv(backend_dir.parent / ".env")
 load_dotenv()
 
 from models import (
@@ -89,7 +93,8 @@ def favicon():
 
 @app.get("/api/health")
 def health_check(x_ors_api_key: Optional[str] = Header(None)):
-    configured = bool(ors_client.get_effective_key(x_ors_api_key))
+    key_val = x_ors_api_key if isinstance(x_ors_api_key, str) else None
+    configured = bool(ors_client.get_effective_key(key_val))
     return {
         "status": "online",
         "service": "Roamify Trip Planner & Scenic Routing Engine",
@@ -111,7 +116,8 @@ async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(
     4. Computes the scenic route with the scenic stops as waypoints.
     5. Returns both routes, stats, and interactive scenic stops.
     """
-    key = req.ors_api_key or x_ors_api_key
+    key_val = x_ors_api_key if isinstance(x_ors_api_key, str) else None
+    key = req.ors_api_key or key_val
 
     try:
         # Step 1: Geocode start and destination
@@ -208,7 +214,8 @@ async def recalculate_route(req: RecalculateRouteRequest, x_ors_api_key: Optiona
     """
     Recalculates route dynamically when user toggles individual stops on or off.
     """
-    key = req.ors_api_key or x_ors_api_key
+    key_val = x_ors_api_key if isinstance(x_ors_api_key, str) else None
+    key = req.ors_api_key or key_val
     all_coords = [req.start_coords] + req.waypoint_coords + [req.dest_coords]
 
     route_raw = await ors_client.get_directions(

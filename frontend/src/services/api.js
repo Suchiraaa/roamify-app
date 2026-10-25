@@ -17,7 +17,7 @@ export async function checkBackendHealth(customApiKey = "") {
     });
     if (!res.ok) throw new Error("Health check failed");
     return await res.json();
-  } catch (err) {
+  } catch {
     return {
       status: "offline",
       service: "FastAPI Backend is not running",
@@ -34,7 +34,7 @@ export async function fetchPresets() {
     });
     if (!res.ok) throw new Error("Presets failed");
     return await res.json();
-  } catch (err) {
+  } catch {
     // Fallback presets if backend is offline
     return [
       {

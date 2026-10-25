@@ -260,13 +260,21 @@ def point_line_distance(p: Tuple[float, float], a: Tuple[float, float], b: Tuple
     dist_km = haversine_distance(p, (proj_x, proj_y))
     return dist_km, t
 
+# Simple in-memory cache to prevent duplicate requests and 429 rate-limiting
+_OVERPASS_CACHE: Dict[str, List[Dict[str, Any]]] = {}
+
 async def fetch_overpass_places(
     min_lat: float, min_lon: float, max_lat: float, max_lon: float,
     interest: str
 ) -> List[Dict[str, Any]]:
     """
     Fetches real places from Overpass API along bounding box corridor.
+    Includes caching and 429 rate-limit avoidance with graceful fallback.
     """
+    cache_key = f"{round(min_lat, 2)}_{round(min_lon, 2)}_{round(max_lat, 2)}_{round(max_lon, 2)}_{interest}"
+    if cache_key in _OVERPASS_CACHE:
+        return _OVERPASS_CACHE[cache_key]
+
     category_query = ""
     if interest == "Places of worship":
         category_query = f'node["amenity"="place_of_worship"]({min_lat},{min_lon},{max_lat},{max_lon});'
@@ -293,7 +301,7 @@ async def fetch_overpass_places(
             resp = await client.post(
                 "https://overpass-api.de/api/interpreter",
                 data={"data": query},
-                headers={"User-Agent": "Mozilla/5.0 Roamify/1.0"}
+                headers={"User-Agent": "Mozilla/5.0 Roamify/1.0 (ScenicRouteFinder)"}
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -324,6 +332,12 @@ async def fetch_overpass_places(
                         "scenic_score": 4.6,
                         "is_included": True
                     })
+                _OVERPASS_CACHE[cache_key] = places
+            elif resp.status_code == 429:
+                print(f"[Overpass Rate Limit Notice]: HTTP 429 received; gracefully using curated catalog.")
+                _OVERPASS_CACHE[cache_key] = []
+            else:
+                print(f"[Overpass API Notice]: HTTP {resp.status_code} returned.")
     except Exception as e:
         print(f"[Overpass API Notice]: {e}")
 

@@ -1,17 +1,21 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import "./App.css";
 
-// Mapbox live map + real-time route search (Member 1)
+// Mapbox Single Interactive Map (absorbs direct route, scenic route, markers & popups)
 import Map from "./Map";
 
-// Trip planner UI components (Member 2 / Subhashini)
-import TripPlannerForm from "./components/TripPlannerForm";
-import RouteMap from "./components/RouteMap";
+// Unified Trip Planning & Navigation Components
+import UnifiedTripPlanner from "./components/UnifiedTripPlanner";
 import RouteSummary from "./components/RouteSummary";
 import ScenicStopsList from "./components/ScenicStopsList";
 import ApiKeyModal from "./components/ApiKeyModal";
+import Speedometer from "./speedometer.jsx";
+import NearbyPlaces from "./NearbyPlaces.jsx";
 
-// FastAPI backend API service (Member 2 / Subhashini)
+// Shared Geolocation Hook
+import { useGeolocation } from "./services/useGeolocation";
+
+// FastAPI backend API service
 import {
   checkBackendHealth,
   fetchPresets,
@@ -19,46 +23,96 @@ import {
   recalculateRoute,
 } from "./services/api";
 
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
+
 function App() {
-  // ── Trip Planner State (ORS / FastAPI) ───────────────────────────────────
-  const [startLocation, setStartLocation] = useState("Bengaluru, Karnataka, India");
-  const [destination, setDestination] = useState("Mysuru, Karnataka, India");
+  // ── Site-wide Day/Night Mode State ──────────────────────────────────────
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("roamify_theme");
+    if (saved === "light" || saved === "dark") return saved;
+    return typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  });
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === "dark" ? "light" : "dark";
+      localStorage.setItem("roamify_theme", next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  // ── Unified Trip Planner State (Unplanned initial state) ────────────────
+  const [startLocation, setStartLocation] = useState("");
+  const [destination, setDestination] = useState("");
   const [budget, setBudget] = useState("Moderate");
   const [interest, setInterest] = useState("Nature");
   const [duration, setDuration] = useState("3 hours");
   const [profile, setProfile] = useState("driving-car");
 
+  // ── Focused Place for Map View (Task 2) ──────────────────────────────────
+  const [focusedLocation, setFocusedLocation] = useState(null);
+
+  // ── Custom Waypoints (Added from Nearby Places) ──────────────────────────
+  const [customWaypoints, setCustomWaypoints] = useState([]); // [{ id, name, address, coordinates: [lng, lat] }]
+
+  // ── Route & Calculation State ────────────────────────────────────────────
   const [loading, setLoading] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [tripResult, setTripResult] = useState(null);
   const [showResults, setShowResults] = useState(false);
 
+  // ── GeoJSON Route Features for Mapbox ────────────────────────────────────
+  const [mapboxRouteGeoJson, setMapboxRouteGeoJson] = useState(null);
+  const [mapboxDirectRouteGeoJson, setMapboxDirectRouteGeoJson] = useState(null);
+
+  // ── Backend Configuration & Preset Trails ────────────────────────────────
   const [presets, setPresets] = useState([]);
   const [backendStatus, setBackendStatus] = useState(null);
   const [apiKey, setApiKey] = useState(
-    () => localStorage.getItem("roamify_ors_key") || ""
+    () => import.meta.env.VITE_ORS_API_KEY || localStorage.getItem("roamify_ors_key") || ""
   );
   const [isConfigOpen, setIsConfigOpen] = useState(false);
 
-  // ── Mapbox live map route state (Member 1) ───────────────────────────────
-  // Holds a GeoJSON Feature (LineString) to display on the Mapbox canvas.
-  // When an ORS scenic route is planned, we convert and push it here so the
-  // Mapbox canvas always reflects the current active route.
-  const [mapboxRouteGeoJson, setMapboxRouteGeoJson] = useState(null);
+  // ── Shared Geolocation & Speed Telemetry ─────────────────────────────────
+  const { userLocation, speed, status: geoStatus, isLive: geoLive } = useGeolocation();
 
-  // ── Backend health check & presets on mount / key change ─────────────────
+  // Helper: Convert geometry array [[lon, lat], ...] to GeoJSON Feature
+  const coordsToGeoJson = useCallback((geometryCoords) => {
+    if (!geometryCoords || geometryCoords.length === 0) return null;
+    return {
+      type: "Feature",
+      properties: {},
+      geometry: {
+        type: "LineString",
+        coordinates: geometryCoords,
+      },
+    };
+  }, []);
+
+  // Backend health check and preset trail fetch on mount / key change
   useEffect(() => {
+    let isMounted = true;
     async function init() {
       const status = await checkBackendHealth(apiKey);
-      setBackendStatus(status);
+      if (isMounted) setBackendStatus(status);
       const presetData = await fetchPresets();
-      setPresets(presetData);
+      if (isMounted) setPresets(presetData);
     }
     init();
+    return () => {
+      isMounted = false;
+    };
   }, [apiKey]);
 
-  // ── ORS API Key management ────────────────────────────────────────────────
   const handleSaveApiKey = (newKey) => {
     setApiKey(newKey);
     if (newKey) {
@@ -69,7 +123,6 @@ function App() {
     checkBackendHealth(newKey).then(setBackendStatus);
   };
 
-  // ── Preset trip quick-select ──────────────────────────────────────────────
   const handleSelectPreset = (preset) => {
     setStartLocation(preset.start);
     setDestination(preset.destination);
@@ -77,29 +130,14 @@ function App() {
     if (preset.duration) setDuration(preset.duration);
     setShowResults(false);
     setMapboxRouteGeoJson(null);
+    setMapboxDirectRouteGeoJson(null);
   };
 
-  /**
-   * Convert an ORS geometry array ([[lon, lat], ...]) into a GeoJSON Feature
-   * compatible with Map.jsx / Mapbox GL route layer.
-   */
-  const orsGeometryToGeoJson = (geometryCoords) => {
-    if (!geometryCoords || geometryCoords.length === 0) return null;
-    return {
-      type: "Feature",
-      properties: {},
-      geometry: {
-        type: "LineString",
-        coordinates: geometryCoords, // ORS already returns [lon, lat] pairs
-      },
-    };
-  };
-
-  // ── Plan Trip via FastAPI + ORS ───────────────────────────────────────────
+  // ── Plan Scenic Trip via FastAPI + OpenRouteServices ─────────────────────
   const handlePlanTrip = async (e) => {
     if (e) e.preventDefault();
     if (!startLocation.trim() || !destination.trim()) {
-      setErrorMsg("Please provide both starting location and destination.");
+      setErrorMsg("Please specify both a starting point and destination.");
       return;
     }
 
@@ -119,17 +157,65 @@ function App() {
         apiKey
       );
 
-      setTripResult(result);
-      setShowResults(true);
+      // If user had already added custom waypoints, recalculate with them included
+      let finalScenicRoute = result.scenic_route;
+      let finalDetourKm = result.detour_added_km;
+      let finalDetourMin = result.detour_added_min;
 
-      // Push the ORS scenic route geometry to the Mapbox live canvas
-      if (result.scenic_route?.geometry?.length > 0) {
-        setMapboxRouteGeoJson(orsGeometryToGeoJson(result.scenic_route.geometry));
+      if (customWaypoints.length > 0 && result.start_location && result.destination) {
+        try {
+          const startCoords = [result.start_location.lon, result.start_location.lat];
+          const destCoords = [result.destination.lon, result.destination.lat];
+          const scenicStopsCoords = (result.scenic_stops || [])
+            .filter((s) => s.is_included !== false)
+            .map((s) => [s.lon, s.lat]);
+          const customCoords = customWaypoints.map((wp) => [wp.coordinates[0], wp.coordinates[1]]);
+          const allWaypoints = [...scenicStopsCoords, ...customCoords];
+
+          const updatedRoute = await recalculateRoute(
+            {
+              start_coords: startCoords,
+              dest_coords: destCoords,
+              waypoint_coords: allWaypoints,
+              profile,
+            },
+            apiKey
+          );
+          finalScenicRoute = updatedRoute;
+          finalDetourKm = Math.max(
+            0,
+            Math.round((updatedRoute.distance_km - result.direct_route.distance_km) * 100) / 100
+          );
+          finalDetourMin = Math.max(
+            0,
+            Math.round((updatedRoute.duration_min - result.direct_route.duration_min) * 10) / 10
+          );
+        } catch (recalcErr) {
+          console.warn("Initial waypoint incorporation notice:", recalcErr);
+        }
       }
 
-      // Smooth scroll to results
+      const mergedResult = {
+        ...result,
+        scenic_route: finalScenicRoute,
+        detour_added_km: finalDetourKm,
+        detour_added_min: finalDetourMin,
+      };
+
+      setTripResult(mergedResult);
+      setShowResults(true);
+
+      // Feed Mapbox with both lines
+      if (finalScenicRoute?.geometry?.length > 0) {
+        setMapboxRouteGeoJson(coordsToGeoJson(finalScenicRoute.geometry));
+      }
+      if (result.direct_route?.geometry?.length > 0) {
+        setMapboxDirectRouteGeoJson(coordsToGeoJson(result.direct_route.geometry));
+      }
+
+      // Smooth scroll to route summary
       setTimeout(() => {
-        document.getElementById("results-section")?.scrollIntoView({
+        document.getElementById("route-summary-section")?.scrollIntoView({
           behavior: "smooth",
         });
       }, 150);
@@ -137,49 +223,38 @@ function App() {
       console.error("Trip planning error:", err);
       setErrorMsg(
         err.message ||
-          "Failed to generate route. Ensure the backend is running at http://127.0.0.1:8000."
+          "Could not calculate scenic route. Ensure backend is running at http://127.0.0.1:8000."
       );
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * Called when Mapbox RouteSearchOverlay calculates a live point-to-point
-   * route independently (Mapbox Directions API). Keeps Mapbox canvas in sync.
-   */
-  const handleMapboxRouteUpdate = (routeGeoJson) => {
-    setMapboxRouteGeoJson(routeGeoJson);
-  };
-
-  // ── Toggle a scenic stop on/off → re-route via FastAPI ───────────────────
-  const handleToggleStop = async (stopId) => {
+  // ── Recalculate route whenever stops or custom waypoints change ──────────
+  const runRouteRecalculation = useCallback(async (updatedScenicStops, updatedCustomWaypoints) => {
     if (!tripResult || recalculating) return;
-
-    const currentStops = tripResult.scenic_stops || [];
-    const updatedStops = currentStops.map((s) =>
-      s.id === stopId ? { ...s, is_included: !s.is_included } : s
-    );
-
-    const includedStops = updatedStops.filter((s) => s.is_included);
 
     setRecalculating(true);
     try {
-      const startCoords = [
-        tripResult.start_location.lon,
-        tripResult.start_location.lat,
-      ];
-      const destCoords = [
-        tripResult.destination.lon,
-        tripResult.destination.lat,
-      ];
-      const waypointCoords = includedStops.map((s) => [s.lon, s.lat]);
+      const startCoords = [tripResult.start_location.lon, tripResult.start_location.lat];
+      const destCoords = [tripResult.destination.lon, tripResult.destination.lat];
+
+      const scenicWaypointCoords = updatedScenicStops
+        .filter((s) => s.is_included !== false)
+        .map((s) => [s.lon, s.lat]);
+
+      const customCoords = updatedCustomWaypoints.map((wp) => [
+        wp.coordinates[0],
+        wp.coordinates[1],
+      ]);
+
+      const allWaypointCoords = [...scenicWaypointCoords, ...customCoords];
 
       const updatedRoute = await recalculateRoute(
         {
           start_coords: startCoords,
           dest_coords: destCoords,
-          waypoint_coords: waypointCoords,
+          waypoint_coords: allWaypointCoords,
           profile,
         },
         apiKey
@@ -187,207 +262,294 @@ function App() {
 
       const addedKm = Math.max(
         0,
-        Math.round(
-          (updatedRoute.distance_km - tripResult.direct_route.distance_km) * 100
-        ) / 100
+        Math.round((updatedRoute.distance_km - tripResult.direct_route.distance_km) * 100) / 100
       );
       const addedMin = Math.max(
         0,
-        Math.round(
-          (updatedRoute.duration_min - tripResult.direct_route.duration_min) * 10
-        ) / 10
+        Math.round((updatedRoute.duration_min - tripResult.direct_route.duration_min) * 10) / 10
       );
 
-      const newTripResult = {
+      setTripResult({
         ...tripResult,
-        scenic_stops: updatedStops,
+        scenic_stops: updatedScenicStops,
         scenic_route: updatedRoute,
         detour_added_km: addedKm,
         detour_added_min: addedMin,
-      };
+      });
 
-      setTripResult(newTripResult);
-
-      // Keep Mapbox canvas in sync with the recalculated route
       if (updatedRoute.geometry?.length > 0) {
-        setMapboxRouteGeoJson(orsGeometryToGeoJson(updatedRoute.geometry));
+        setMapboxRouteGeoJson(coordsToGeoJson(updatedRoute.geometry));
       }
     } catch (err) {
-      console.error("Failed to recalculate route:", err);
+      console.error("Route recalculation error:", err);
     } finally {
       setRecalculating(false);
     }
+  }, [tripResult, recalculating, profile, apiKey, coordsToGeoJson]);
+
+  // ── Toggle individual scenic stop inclusion ──────────────────────────────
+  const handleToggleStop = (stopId) => {
+    if (!tripResult) return;
+    const currentStops = tripResult.scenic_stops || [];
+    const updatedStops = currentStops.map((s) =>
+      s.id === stopId ? { ...s, is_included: !s.is_included } : s
+    );
+    runRouteRecalculation(updatedStops, customWaypoints);
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Add Waypoint from Nearby Places ───────────────────────────────────────
+  const handleAddWaypoint = useCallback((place) => {
+    if (!place || !place.coordinates) return;
+
+    // Prevent duplicate additions
+    if (customWaypoints.some((wp) => wp.id === place.id)) {
+      return;
+    }
+
+    const newWaypoint = {
+      id: place.id,
+      name: place.name || "Scenic Waypoint",
+      address: place.address || "",
+      coordinates: place.coordinates, // [lng, lat]
+    };
+
+    const nextWaypoints = [...customWaypoints, newWaypoint];
+    setCustomWaypoints(nextWaypoints);
+
+    // If an active trip exists, immediately recalculate route to include this waypoint
+    if (tripResult && tripResult.start_location && tripResult.destination) {
+      runRouteRecalculation(tripResult.scenic_stops || [], nextWaypoints);
+    }
+  }, [customWaypoints, tripResult, runRouteRecalculation]);
+
+  // ── Focus Place Handler (Task 2) ─────────────────────────────────────────
+  const handleFocusPlace = useCallback((place) => {
+    if (!place) return;
+    const lon = Number(place.lon ?? place.longitude ?? place.coordinates?.[0]);
+    const lat = Number(place.lat ?? place.latitude ?? place.coordinates?.[1]);
+    const name = place.name || "Selected Location";
+
+    if (Number.isFinite(lon) && Number.isFinite(lat)) {
+      setFocusedLocation({ lon, lat, name });
+      const mapSection = document.getElementById("primary-map-section");
+      if (mapSection) {
+        mapSection.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+  }, []);
+
+  // ── Remove Waypoint from Trip ─────────────────────────────────────────────
+  const handleRemoveWaypoint = (waypointId) => {
+    const nextWaypoints = customWaypoints.filter((wp) => wp.id !== waypointId);
+    setCustomWaypoints(nextWaypoints);
+
+    if (tripResult && tripResult.start_location && tripResult.destination) {
+      runRouteRecalculation(tripResult.scenic_stops || [], nextWaypoints);
+    }
+  };
+
+  // Listen for legacy custom event "roamify:add-waypoint"
+  useEffect(() => {
+    const onCustomEvent = (e) => {
+      if (e.detail && e.detail.coordinates) {
+        handleAddWaypoint(e.detail);
+      }
+    };
+    window.addEventListener("roamify:add-waypoint", onCustomEvent);
+    return () => window.removeEventListener("roamify:add-waypoint", onCustomEvent);
+  }, [handleAddWaypoint]);
+
   return (
-    <div className="app">
-      {/* ── Top Navigation ─────────────────────────────────────────────── */}
-      <nav className="navbar">
-        <div className="nav-brand">
-          <a className="logo" href="#home">
-            🌍 Roamify
-          </a>
-          <span className="nav-tagline">Scenic Routing &amp; Trip Planner</span>
-        </div>
-
-        <div className="nav-actions">
-          <button
-            className={`ors-status-btn ${
-              backendStatus?.ors_api_key_configured
-                ? "status-live"
-                : "status-ready"
-            }`}
-            onClick={() => setIsConfigOpen(true)}
-            title="Configure OpenRouteServices API key"
-          >
-            <span className="pulse-indicator">●</span>
-            {backendStatus?.ors_api_key_configured
-              ? "OpenRouteService Live"
-              : "ORS Engine Config"}
-          </button>
-        </div>
-      </nav>
-
-      {/* ── Main Content ───────────────────────────────────────────────── */}
-      <main id="home">
-        {/* Hero Banner */}
-        <section className="hero">
-          <p className="eyebrow">THE JOURNEY IS THE DESTINATION</p>
-          <h1>
-            Turn your drive into
-            <br />
-            <span>an unforgettable exploration.</span>
-          </h1>
-          <p className="hero-text">
-            Roamify intelligently calculates scenic detours, discovers hidden
-            vistas, cultural enclaves, and authentic food stops along your path
-            using OpenRouteServices.
-          </p>
-        </section>
-
-        {/* ── Mapbox Live Map ──────────────────────────────────────────── */}
-        {/*
-          The Mapbox canvas provides real-time GPS, live map route search
-          (Mapbox Directions API), Day/Night/Satellite styles, 2D/3D toggle,
-          and geocoding autocomplete — independent of the ORS backend.
-          It also displays the ORS scenic route when a trip is planned
-          (via mapboxRouteGeoJson state).
-        */}
-        <section className="mapbox-section">
-          <div className="mapbox-section-header">
-            <div>
-              <h2>Live Map &amp; Route Search</h2>
-              <p className="mapbox-section-subtext">
-                Search routes live, toggle map styles and 3D view — or plan a
-                scenic trip below using OpenRouteServices.
-              </p>
-            </div>
+    <div className="roamify-app-root" data-theme={theme}>
+      {/* ── Top Navigation Bar ─────────────────────────────────────────── */}
+      <header className="app-navbar">
+        <div className="navbar-container">
+          <div className="nav-brand-group">
+            <span className="brand-logo-mark" aria-hidden="true">🧭</span>
+            <span className="brand-name">Roamify</span>
+            <span className="brand-divider">/</span>
+            <span className="brand-sub">Scenic Navigation</span>
           </div>
-          <div className="mapbox-map-container">
-            <Map
-              routeGeoJson={mapboxRouteGeoJson}
-              onRouteUpdate={handleMapboxRouteUpdate}
-            />
-          </div>
-        </section>
 
-        {/* ── ORS Trip Planner Form ────────────────────────────────────── */}
-        <TripPlannerForm
-          startLocation={startLocation}
-          setStartLocation={setStartLocation}
-          destination={destination}
-          setDestination={setDestination}
-          budget={budget}
-          setBudget={setBudget}
-          interest={interest}
-          setInterest={setInterest}
-          duration={duration}
-          setDuration={setDuration}
-          profile={profile}
-          setProfile={setProfile}
-          onSubmit={handlePlanTrip}
-          loading={loading}
-          presets={presets}
-          onSelectPreset={handleSelectPreset}
-        />
+          <div className="nav-status-group">
+            {/* Day / Night Theme Toggle */}
+            <button
+              type="button"
+              className="theme-toggle-btn"
+              onClick={toggleTheme}
+              title={`Switch to ${theme === "dark" ? "Day" : "Night"} Mode`}
+              aria-label="Toggle day and night mode"
+            >
+              <span className="theme-toggle-icon">{theme === "dark" ? "🌙" : "☀️"}</span>
+              <span className="theme-toggle-label">{theme === "dark" ? "Night" : "Day"}</span>
+            </button>
+
+            <button
+              type="button"
+              className={`engine-status-pill ${
+                backendStatus?.ors_api_key_configured ? "is-configured" : "is-default"
+              }`}
+              onClick={() => setIsConfigOpen(true)}
+              title="OpenRouteServices Configuration"
+            >
+              <span className="status-indicator-dot" />
+              <span>
+                {backendStatus?.ors_api_key_configured
+                  ? "ORS Engine Active"
+                  : "Configure ORS Key"}
+              </span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Main Application Content ───────────────────────────────────── */}
+      <main className="app-main-layout">
+        {/* Unified Search & Preferences Panel */}
+        <section className="planner-section" aria-label="Trip Configuration">
+          <UnifiedTripPlanner
+            startLocation={startLocation}
+            setStartLocation={setStartLocation}
+            destination={destination}
+            setDestination={setDestination}
+            budget={budget}
+            setBudget={setBudget}
+            interest={interest}
+            setInterest={setInterest}
+            duration={duration}
+            setDuration={setDuration}
+            profile={profile}
+            setProfile={setProfile}
+            onSubmit={handlePlanTrip}
+            loading={loading}
+            presets={presets}
+            onSelectPreset={handleSelectPreset}
+            mapboxToken={MAPBOX_TOKEN}
+            userLocation={userLocation}
+          />
+        </section>
 
         {/* Global Error Banner */}
         {errorMsg && (
-          <div className="error-banner" role="alert">
-            <span className="error-icon">⚠️</span>
-            <div>
-              <strong>Could not generate route:</strong> {errorMsg}
-              <p className="error-subtext">
-                Tip: Start the FastAPI backend with{" "}
-                <code>python run.py</code> inside the <code>backend</code>{" "}
-                directory. Confirm your ORS API key via the config button above.
-              </p>
+          <div className="error-alert-banner" role="alert">
+            <span className="alert-icon">⚠️</span>
+            <div className="alert-body">
+              <strong>Calculation Error:</strong> {errorMsg}
             </div>
+            <button
+              type="button"
+              className="alert-dismiss"
+              onClick={() => setErrorMsg("")}
+              aria-label="Dismiss error"
+            >
+              ✕
+            </button>
           </div>
         )}
 
-        {/* ── Results Section ──────────────────────────────────────────── */}
-        {showResults && tripResult && (
-          <section id="results-section" className="results-wrapper">
-            <div className="results-header">
-              <span className="eyebrow">SCENIC ITINERARY GENERATED</span>
-              <h2>
-                {tripResult.start_location.name} →{" "}
-                {tripResult.destination.name}
-              </h2>
-              <p className="section-text">
-                {interest} focus · {budget} · Detour budget: {duration}
-              </p>
+        {/* ── Primary Map Section (Single Mapbox Canvas) ────────────────── */}
+        <section id="primary-map-section" className="primary-map-section" aria-label="Interactive Route Map">
+          <div className="map-viewport-frame">
+            <Map
+              routeGeoJson={mapboxRouteGeoJson}
+              directRouteGeoJson={mapboxDirectRouteGeoJson}
+              startLocation={tripResult?.start_location}
+              destination={tripResult?.destination}
+              scenicStops={tripResult?.scenic_stops || []}
+              customWaypoints={customWaypoints}
+              onToggleStop={handleToggleStop}
+              onRemoveWaypoint={handleRemoveWaypoint}
+              sharedLocation={userLocation}
+              theme={theme}
+              focusedLocation={focusedLocation}
+            />
+
+            {/* Live Speedometer Telemetry HUD (Overlaid neatly on top-left of map) */}
+            <div className="map-speedometer-overlay">
+              <Speedometer speed={speed} status={geoStatus} isLive={geoLive} />
             </div>
 
-            {/* Route Stats & Metrics Comparison */}
+            {/* Recalculating indicator */}
+            {recalculating && (
+              <div className="map-updating-overlay">
+                <span className="btn-spinner" /> Updating route with detours...
+              </div>
+            )}
+          </div>
+        </section>
+
+        {/* ── Active Waypoints Bar (Chips) ──────────────────────────────── */}
+        {customWaypoints.length > 0 && (
+          <section className="active-waypoints-strip" aria-label="Trip Waypoints">
+            <span className="waypoints-label">Active Waypoints ({customWaypoints.length}):</span>
+            <div className="waypoints-chip-list">
+              {customWaypoints.map((wp) => (
+                <div key={wp.id} className="waypoint-chip">
+                  <span className="chip-name">{wp.name}</span>
+                  <button
+                    type="button"
+                    className="chip-remove"
+                    onClick={() => handleRemoveWaypoint(wp.id)}
+                    title={`Remove ${wp.name} from trip`}
+                    aria-label={`Remove ${wp.name}`}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Results Section (Route Metrics & Scenic Stops) ────────────── */}
+        {showResults && tripResult && (
+          <section id="route-summary-section" className="results-container">
+            <div className="results-header-bar">
+              <div>
+                <span className="results-eyebrow">SCENIC DETOUR ITINERARY</span>
+                <h2 className="results-title">
+                  {tripResult.start_location.name} → {tripResult.destination.name}
+                </h2>
+              </div>
+              <div className="results-meta-pill">
+                {interest} focus · {budget} budget · {duration}
+              </div>
+            </div>
+
+            {/* Route Summary Comparison */}
             <RouteSummary
               directRoute={tripResult.direct_route}
               scenicRoute={tripResult.scenic_route}
               detourAddedKm={tripResult.detour_added_km}
               detourAddedMin={tripResult.detour_added_min}
               stopsCount={
-                tripResult.scenic_stops?.filter((s) => s.is_included).length ||
-                0
+                (tripResult.scenic_stops?.filter((s) => s.is_included !== false).length || 0) +
+                customWaypoints.length
               }
               provider={tripResult.provider}
             />
-
-            {/*
-              Leaflet Scenic Itinerary Map — used exclusively here in the
-              results section to visualise the ORS scenic route corridor with
-              clickable stop markers. The Mapbox canvas above shows the live
-              searchable map; this card shows the computed scenic itinerary.
-            */}
-            <div className="map-card">
-              <div className="map-card-header">
-                <h3>Interactive Scenic Route Corridor</h3>
-                {recalculating && (
-                  <span className="recalculating-badge">Updating route...</span>
-                )}
-              </div>
-              <RouteMap
-                startLocation={tripResult.start_location}
-                destination={tripResult.destination}
-                directRoute={tripResult.direct_route}
-                scenicRoute={tripResult.scenic_route}
-                scenicStops={tripResult.scenic_stops}
-                onToggleStop={handleToggleStop}
-              />
-            </div>
 
             {/* Scenic Stops Along The Corridor */}
             <ScenicStopsList
               stops={tripResult.scenic_stops}
               onToggleStop={handleToggleStop}
+              onFocusStop={handleFocusPlace}
               interest={interest}
             />
           </section>
         )}
+
+        {/* ── Nearby Places Detour Discovery ───────────────────────────── */}
+        <NearbyPlaces
+          userLocation={userLocation}
+          activeWaypoints={customWaypoints}
+          onAddWaypoint={handleAddWaypoint}
+          onRemoveWaypoint={handleRemoveWaypoint}
+          onFocusPlace={handleFocusPlace}
+        />
       </main>
 
-      {/* ── ORS Settings Modal ─────────────────────────────────────────────── */}
+      {/* ── ORS API Key Settings Modal ─────────────────────────────────── */}
       <ApiKeyModal
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
@@ -396,12 +558,10 @@ function App() {
         backendStatus={backendStatus}
       />
 
-      {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer>
+      {/* ── Application Footer ─────────────────────────────────────────── */}
+      <footer className="app-footer">
         <p>
-          Roamify © 2026 · Powered by{" "}
-          <strong>OpenRouteServices</strong> &amp; OpenStreetMap · Live map by{" "}
-          <strong>Mapbox</strong>.
+          Roamify © 2026 · Powered by <strong>OpenRouteServices</strong> &amp; OpenStreetMap · Map engine by <strong>Mapbox</strong>.
         </p>
       </footer>
     </div>

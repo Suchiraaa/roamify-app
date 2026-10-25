@@ -60,10 +60,20 @@ def haversine_distance(coord1: Tuple[float, float], coord2: Tuple[float, float])
 
 class OpenRouteServiceClient:
     def __init__(self, default_api_key: Optional[str] = None):
-        self.default_api_key = default_api_key or os.getenv("ORS_API_KEY", "").strip()
+        from pathlib import Path
+        from dotenv import load_dotenv
+        backend_dir = Path(__file__).resolve().parent
+        load_dotenv(backend_dir / ".env")
+        load_dotenv(backend_dir.parent / ".env")
+        load_dotenv()
+        self.default_api_key = (
+            default_api_key
+            or os.getenv("ORS_API_KEY", "").strip()
+            or os.getenv("VITE_ORS_API_KEY", "").strip()
+        )
 
     def get_effective_key(self, custom_key: Optional[str] = None) -> Optional[str]:
-        if custom_key and custom_key.strip():
+        if custom_key and isinstance(custom_key, str) and custom_key.strip():
             return custom_key.strip()
         if self.default_api_key:
             return self.default_api_key

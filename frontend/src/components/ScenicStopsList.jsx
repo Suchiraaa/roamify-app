@@ -1,7 +1,7 @@
 export default function ScenicStopsList({
   stops = [],
   onToggleStop,
-  interest,
+  onFocusStop,
 }) {
   if (!stops || stops.length === 0) {
     return (
@@ -58,14 +58,25 @@ export default function ScenicStopsList({
                       ⭐ {stop.scenic_score || 4.5}
                     </span>
                     {stop.lat && stop.lon && (
-                      <a
-                        href={`https://www.openstreetmap.org/?mlat=${stop.lat}&mlon=${stop.lon}#map=16/${stop.lat}/${stop.lon}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="meta-link"
-                      >
-                        Map view ↗
-                      </a>
+                      <div className="stop-map-actions">
+                        <button
+                          type="button"
+                          className="btn-focus-map"
+                          onClick={() => onFocusStop && onFocusStop(stop)}
+                          title={`Focus ${stop.name} on the interactive map`}
+                        >
+                          📍 View Map
+                        </button>
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stop.name)}+${stop.lat},${stop.lon}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="meta-link-external"
+                          title="Open location in external map"
+                        >
+                          ↗
+                        </a>
+                      </div>
                     )}
                   </div>
                 </div>

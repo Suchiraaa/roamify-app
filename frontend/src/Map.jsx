@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './Map.css';
-import RouteSearchOverlay from './RouteSearchOverlay';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 if (MAPBOX_TOKEN) {
@@ -15,20 +14,33 @@ const MAP_STYLES = [
   { label: 'Satellite', url: 'mapbox://styles/mapbox/satellite-streets-v12' }
 ];
 
-// Neutral default initial center for canvas placement before user geolocation
-const DEFAULT_CENTER = [77.5946, 12.9716];
+// Neutral world view for initial unplanned state
+const DEFAULT_CENTER = [0, 20];
+const DEFAULT_ZOOM = 2;
 
-export default function Map({ routeGeoJson, onRouteUpdate }) {
+export default function Map({
+  routeGeoJson,
+  directRouteGeoJson,
+  startLocation,
+  destination,
+  scenicStops = [],
+  customWaypoints = [],
+  onToggleStop,
+  onRemoveWaypoint,
+  sharedLocation,
+  theme = 'light',
+  focusedLocation,
+}) {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const geolocateCtrlRef = useRef(null);
-  const activeRouteRef = useRef(routeGeoJson || null);
+  const markersRef = useRef([]);
+  const hasCenteredOnUserRef = useRef(false);
 
-  const [currentStyle, setCurrentStyle] = useState(MAP_STYLES[0].url);
+  const initialStyle = theme === 'dark' ? MAP_STYLES[1].url : MAP_STYLES[0].url;
+  const [currentStyle, setCurrentStyle] = useState(initialStyle);
+  const currentStyleRef = useRef(initialStyle);
   const [is3D, setIs3D] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-  const [activeRouteInfo, setActiveRouteInfo] = useState(null);
-  const [hasActiveRoute, setHasActiveRoute] = useState(Boolean(routeGeoJson?.geometry?.coordinates?.length));
   const [toastMessage, setToastMessage] = useState(null); // { text, type: 'info' | 'warning' }
   const toastTimerRef = useRef(null);
 
@@ -38,7 +50,7 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
     setToastMessage({ text, type });
     toastTimerRef.current = setTimeout(() => {
       setToastMessage(null);
-    }, 4500);
+    }, 4000);
   }, []);
 
   // Safely fit map viewport to an array of coordinate pairs [lng, lat]
@@ -51,17 +63,17 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
       }, new mapboxgl.LngLatBounds(coordinates[0], coordinates[0]));
 
       map.current.fitBounds(bounds, {
-        padding: { top: 90, bottom: 90, left: 90, right: 90 },
+        padding: { top: 70, bottom: 70, left: 70, right: 70 },
         maxZoom: 15,
-        duration: 1200
+        duration: 1100
       });
     } catch (err) {
       console.warn('fitBounds error:', err);
     }
   }, []);
 
-  // Configure road-snapped GeoJSON source & polyline layers
-  const loadRouteLayers = useCallback((routeData) => {
+  // Configure road-snapped GeoJSON sources & layers (direct and scenic routes)
+  const loadRouteLayers = useCallback((scenicData, directData) => {
     if (!map.current) return;
 
     const emptyGeoJson = {
@@ -70,19 +82,46 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
       geometry: { type: 'LineString', coordinates: [] }
     };
 
-    const dataToLoad = routeData || emptyGeoJson;
+    // 1. Direct Route Source & Dashed Layer
+    const directPayload = directData || emptyGeoJson;
+    if (!map.current.getSource('direct-route')) {
+      map.current.addSource('direct-route', {
+        type: 'geojson',
+        data: directPayload
+      });
+    } else {
+      map.current.getSource('direct-route').setData(directPayload);
+    }
 
-    // Add or update source
+    if (!map.current.getLayer('direct-route-line')) {
+      map.current.addLayer({
+        id: 'direct-route-line',
+        type: 'line',
+        source: 'direct-route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        paint: {
+          'line-color': '#64748b',
+          'line-width': 3.5,
+          'line-dasharray': [2, 2],
+          'line-opacity': 0.75
+        }
+      });
+    }
+
+    // 2. Scenic Route Source & Vibrant Glow Layers
+    const scenicPayload = scenicData || emptyGeoJson;
     if (!map.current.getSource('scenic-route')) {
       map.current.addSource('scenic-route', {
         type: 'geojson',
-        data: dataToLoad
+        data: scenicPayload
       });
     } else {
-      map.current.getSource('scenic-route').setData(dataToLoad);
+      map.current.getSource('scenic-route').setData(scenicPayload);
     }
 
-    // Outer glow / contrast casing layer
     if (!map.current.getLayer('route-glow')) {
       map.current.addLayer({
         id: 'route-glow',
@@ -93,14 +132,13 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
           'line-cap': 'round'
         },
         paint: {
-          'line-color': '#1d4ed8',
+          'line-color': '#059669',
           'line-width': 10,
-          'line-opacity': 0.35
+          'line-opacity': 0.3
         }
       });
     }
 
-    // Inner sharp polyline layer
     if (!map.current.getLayer('route-line')) {
       map.current.addLayer({
         id: 'route-line',
@@ -111,7 +149,7 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
           'line-cap': 'round'
         },
         paint: {
-          'line-color': '#2563eb',
+          'line-color': '#10b981',
           'line-width': 5,
           'line-opacity': 0.95
         }
@@ -119,15 +157,181 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
     }
   }, []);
 
+  // Sync Markers on Mapbox (Start, Destination, Scenic Stops, Custom Waypoints)
+  const syncMarkers = useCallback(() => {
+    if (!map.current) return;
+
+    // Remove existing markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    const allBoundingCoords = [];
+
+    // 1. Start Marker (Green)
+    if (startLocation && (startLocation.lat || startLocation.latitude)) {
+      const lat = Number(startLocation.lat ?? startLocation.latitude);
+      const lon = Number(startLocation.lon ?? startLocation.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        const el = document.createElement('div');
+        el.className = 'custom-mapbox-marker marker-start';
+        el.innerHTML = '<span class="marker-symbol">A</span>';
+
+        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+          <div class="marker-popup-content">
+            <span class="popup-tag origin-tag">Origin</span>
+            <h4 class="popup-title">${startLocation.name || 'Starting Point'}</h4>
+            ${startLocation.display_name ? `<p class="popup-sub">${startLocation.display_name}</p>` : ''}
+          </div>
+        `);
+
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([lon, lat])
+          .setPopup(popup)
+          .addTo(map.current);
+
+        markersRef.current.push(marker);
+        allBoundingCoords.push([lon, lat]);
+      }
+    }
+
+    // 2. Destination Marker (Red)
+    if (destination && (destination.lat || destination.latitude)) {
+      const lat = Number(destination.lat ?? destination.latitude);
+      const lon = Number(destination.lon ?? destination.longitude);
+      if (Number.isFinite(lat) && Number.isFinite(lon)) {
+        const el = document.createElement('div');
+        el.className = 'custom-mapbox-marker marker-dest';
+        el.innerHTML = '<span class="marker-symbol">B</span>';
+
+        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+          <div class="marker-popup-content">
+            <span class="popup-tag dest-tag">Destination</span>
+            <h4 class="popup-title">${destination.name || 'Destination'}</h4>
+            ${destination.display_name ? `<p class="popup-sub">${destination.display_name}</p>` : ''}
+          </div>
+        `);
+
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([lon, lat])
+          .setPopup(popup)
+          .addTo(map.current);
+
+        markersRef.current.push(marker);
+        allBoundingCoords.push([lon, lat]);
+      }
+    }
+
+    // 3. Scenic Stops Markers (Amber/Slate with Toggle Action in Popup)
+    scenicStops.forEach((stop, index) => {
+      const lat = Number(stop.lat);
+      const lon = Number(stop.lon);
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+      const isIncluded = stop.is_included !== false;
+      const el = document.createElement('div');
+      el.className = `custom-mapbox-marker marker-scenic-stop ${isIncluded ? 'is-included' : 'is-excluded'}`;
+      el.innerHTML = `<span class="marker-symbol">${index + 1}</span>`;
+
+      const popupNode = document.createElement('div');
+      popupNode.className = 'marker-popup-content';
+      popupNode.innerHTML = `
+        <span class="popup-tag stop-tag">Stop #${index + 1} · ${stop.category || 'Scenic Vista'}</span>
+        <h4 class="popup-title">${stop.name}</h4>
+        <p class="popup-desc">${stop.description || ''}</p>
+        <div class="popup-meta">
+          <span>+${stop.detour_min || 15} min detour</span>
+          <span>Score: ${stop.scenic_score || 4.5}</span>
+        </div>
+        <button type="button" class="popup-action-btn ${isIncluded ? 'btn-remove-stop' : 'btn-add-stop'}">
+          ${isIncluded ? 'Remove from Route' : '+ Include in Route'}
+        </button>
+      `;
+
+      const actionBtn = popupNode.querySelector('.popup-action-btn');
+      if (actionBtn && onToggleStop) {
+        actionBtn.addEventListener('click', () => {
+          onToggleStop(stop.id);
+        });
+      }
+
+      const popup = new mapboxgl.Popup({ offset: 25 }).setDOMContent(popupNode);
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([lon, lat])
+        .setPopup(popup)
+        .addTo(map.current);
+
+      markersRef.current.push(marker);
+      allBoundingCoords.push([lon, lat]);
+    });
+
+    // 4. Custom Waypoints Markers (Added from Nearby Places)
+    customWaypoints.forEach((wp) => {
+      if (!wp.coordinates || wp.coordinates.length !== 2) return;
+      const [lon, lat] = wp.coordinates;
+
+      const el = document.createElement('div');
+      el.className = 'custom-mapbox-marker marker-custom-waypoint';
+      el.innerHTML = '<span class="marker-symbol">★</span>';
+
+      const popupNode = document.createElement('div');
+      popupNode.className = 'marker-popup-content';
+      popupNode.innerHTML = `
+        <span class="popup-tag waypoint-tag">Custom Waypoint</span>
+        <h4 class="popup-title">${wp.name}</h4>
+        ${wp.address ? `<p class="popup-sub">${wp.address}</p>` : ''}
+        <button type="button" class="popup-action-btn btn-remove-stop">
+          Remove from Trip
+        </button>
+      `;
+
+      const removeBtn = popupNode.querySelector('.popup-action-btn');
+      if (removeBtn && onRemoveWaypoint) {
+        removeBtn.addEventListener('click', () => {
+          onRemoveWaypoint(wp.id);
+        });
+      }
+
+      const popup = new mapboxgl.Popup({ offset: 25 }).setDOMContent(popupNode);
+
+      const marker = new mapboxgl.Marker({ element: el })
+        .setLngLat([lon, lat])
+        .setPopup(popup)
+        .addTo(map.current);
+
+      markersRef.current.push(marker);
+      allBoundingCoords.push([lon, lat]);
+    });
+
+    // Fit map bounds to coordinates if route coordinates are also available
+    if (routeGeoJson?.geometry?.coordinates?.length) {
+      fitMapToBounds([...routeGeoJson.geometry.coordinates, ...allBoundingCoords]);
+    } else if (allBoundingCoords.length > 0) {
+      fitMapToBounds(allBoundingCoords);
+    }
+  }, [
+    startLocation,
+    destination,
+    scenicStops,
+    customWaypoints,
+    routeGeoJson,
+    onToggleStop,
+    onRemoveWaypoint,
+    fitMapToBounds
+  ]);
+
   // Initialize Mapbox Canvas
   useEffect(() => {
     if (!MAPBOX_TOKEN || map.current) return;
 
+    const initialCenter = sharedLocation || DEFAULT_CENTER;
+    const initialZoom = sharedLocation ? 12 : DEFAULT_ZOOM;
+
     const mapInstance = new mapboxgl.Map({
       container: mapContainer.current,
       style: currentStyle,
-      center: DEFAULT_CENTER,
-      zoom: 11,
+      center: initialCenter,
+      zoom: initialZoom,
       pitch: 0,
       bearing: 0,
       antialias: true
@@ -140,9 +344,7 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
 
     // Live Device Geolocation Control
     const geolocate = new mapboxgl.GeolocateControl({
-      positionOptions: {
-        enableHighAccuracy: true
-      },
+      positionOptions: { enableHighAccuracy: true },
       trackUserLocation: true,
       showUserHeading: true,
       showUserLocation: true
@@ -151,166 +353,155 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
     geolocateCtrlRef.current = geolocate;
     mapInstance.addControl(geolocate, 'top-right');
 
-    // Handle live geolocation coordinate updates
-    geolocate.on('geolocate', (e) => {
-      if (e.coords) {
-        setUserLocation([e.coords.longitude, e.coords.latitude]);
-      }
-    });
-
-    // Handle geolocation permission or hardware errors gracefully without fabricating location
-    geolocate.on('error', (err) => {
-      console.warn('Mapbox GeolocateControl notice:', err);
-      if (err.code === 1) {
-        showToast('Location permission denied. Map is ready for manual search.', 'info');
-      } else if (err.code === 2 || err.code === 3) {
-        showToast('GPS position unavailable. You can enter locations manually.', 'info');
-      }
-    });
-
-    // Synchronize 3D pitch state with camera tilt
     mapInstance.on('pitch', () => {
       setIs3D(mapInstance.getPitch() > 25);
     });
 
-    // Map load handler - strictly renders only active route if provided, never mock routes
     mapInstance.on('load', () => {
-      loadRouteLayers(activeRouteRef.current);
-
-      if (activeRouteRef.current?.geometry?.coordinates?.length) {
-        fitMapToBounds(activeRouteRef.current.geometry.coordinates);
-      }
-
-      // Request browser geolocation permission and center on user's real position
-      try {
-        geolocate.trigger();
-      } catch {
-        // Geolocation trigger fallback for non-secure contexts
-      }
+      loadRouteLayers(routeGeoJson, directRouteGeoJson);
+      syncMarkers();
     });
 
     return () => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
       if (map.current) {
         map.current.remove();
         map.current = null;
       }
     };
-  }, [currentStyle, fitMapToBounds, loadRouteLayers, showToast]);
+  }, []); // Run once on mount
+
+  // If user grants device location permission and no route exists yet, center on real device location
+  useEffect(() => {
+    if (sharedLocation && map.current && !hasCenteredOnUserRef.current && !routeGeoJson) {
+      hasCenteredOnUserRef.current = true;
+      map.current.flyTo({ center: sharedLocation, zoom: 13, duration: 1200 });
+    }
+  }, [sharedLocation, routeGeoJson]);
+
+  // Synchronize map style with site theme (Day vs Night) unless explicitly in Satellite mode
+  useEffect(() => {
+    if (!map.current) return;
+    const targetStyle =
+      theme === 'dark'
+        ? 'mapbox://styles/mapbox/navigation-night-v1'
+        : 'mapbox://styles/mapbox/navigation-day-v1';
+
+    if (currentStyleRef.current !== targetStyle && currentStyleRef.current !== 'mapbox://styles/mapbox/satellite-streets-v12') {
+      currentStyleRef.current = targetStyle;
+      map.current.setStyle(targetStyle);
+      map.current.once('style.load', () => {
+        loadRouteLayers(routeGeoJson, directRouteGeoJson);
+        syncMarkers();
+      });
+      setTimeout(() => setCurrentStyle(targetStyle), 0);
+    }
+  }, [theme, routeGeoJson, directRouteGeoJson, loadRouteLayers, syncMarkers]);
+
+  // Handle focusing on a selected stop or nearby place
+  useEffect(() => {
+    if (!focusedLocation || !map.current) return;
+    const lon = Number(focusedLocation.lon ?? focusedLocation.lng ?? focusedLocation.longitude);
+    const lat = Number(focusedLocation.lat ?? focusedLocation.latitude);
+    const name = focusedLocation.name || 'Selected Place';
+
+    if (Number.isFinite(lon) && Number.isFinite(lat)) {
+      map.current.flyTo({
+        center: [lon, lat],
+        zoom: 15,
+        duration: 1200,
+        essential: true,
+      });
+
+      new mapboxgl.Popup({ offset: 25, closeButton: true })
+        .setLngLat([lon, lat])
+        .setHTML(`
+          <div class="marker-popup-content focused-popup">
+            <span class="popup-tag stop-tag">Selected Place</span>
+            <h4 class="popup-title">${name}</h4>
+          </div>
+        `)
+        .addTo(map.current);
+
+      setTimeout(() => {
+        showToast(`Focused on ${name}`, 'info');
+      }, 0);
+    }
+  }, [focusedLocation, showToast]);
+
+  // Sync route layers when routeGeoJson or directRouteGeoJson updates
+  useEffect(() => {
+    if (map.current && map.current.isStyleLoaded()) {
+      loadRouteLayers(routeGeoJson, directRouteGeoJson);
+      syncMarkers();
+    }
+  }, [routeGeoJson, directRouteGeoJson, loadRouteLayers, syncMarkers]);
 
   // Handle dynamic map style switching (Day, Night, Satellite)
   const handleSwitchStyle = (styleUrl) => {
     if (styleUrl === currentStyle || !map.current) return;
+    currentStyleRef.current = styleUrl;
+    setCurrentStyle(styleUrl);
     setCurrentStyle(styleUrl);
 
     map.current.setStyle(styleUrl);
     map.current.once('style.load', () => {
-      // Re-apply route line layers onto newly loaded style without losing or creating any route
-      loadRouteLayers(activeRouteRef.current);
+      loadRouteLayers(routeGeoJson, directRouteGeoJson);
+      syncMarkers();
     });
   };
 
-  // Recenter to live GPS location (does not touch route or destination)
+  // Recenter to live GPS location
   const handleRecenterLocation = () => {
-    if (userLocation && map.current) {
-      map.current.flyTo({ center: userLocation, zoom: 15, duration: 1000 });
+    if (sharedLocation && map.current) {
+      map.current.flyTo({ center: sharedLocation, zoom: 15, duration: 900 });
+      showToast('Centered on your live location', 'info');
     } else if (geolocateCtrlRef.current) {
       try {
         geolocateCtrlRef.current.trigger();
         showToast('Requesting GPS location...', 'info');
       } catch {
-        showToast('Current GPS location is unavailable. Check location permissions.', 'warning');
+        showToast('Current GPS location is unavailable.', 'warning');
       }
     } else {
       showToast('Current GPS location is unavailable.', 'warning');
     }
   };
 
-  // Recenter Route Handler: strictly centers on active route if one exists, does not fabricate
+  // Recenter Route Handler
   const handleRecenterRoute = () => {
-    if (activeRouteRef.current?.geometry?.coordinates?.length) {
-      fitMapToBounds(activeRouteRef.current.geometry.coordinates);
+    if (routeGeoJson?.geometry?.coordinates?.length) {
+      fitMapToBounds(routeGeoJson.geometry.coordinates);
+      showToast('View fitted to active scenic route', 'info');
     } else {
-      showToast('No active route to recenter. Enter a start and destination first.', 'info');
+      showToast('No active route to recenter.', 'info');
     }
   };
 
-  // Toggle 3D Pitch Handler: toggles camera tilt between 2D top-down and 3D angle without modifying route
+  // Toggle 3D Pitch Handler
   const handleTogglePitch = () => {
     if (!map.current) return;
 
     if (is3D) {
-      map.current.easeTo({
-        pitch: 0,
-        bearing: 0,
-        duration: 750
-      });
+      map.current.easeTo({ pitch: 0, bearing: 0, duration: 600 });
       setIs3D(false);
     } else {
-      map.current.easeTo({
-        pitch: 60,
-        bearing: -15,
-        duration: 750
-      });
+      map.current.easeTo({ pitch: 58, bearing: -15, duration: 600 });
       setIs3D(true);
     }
   };
 
-  // Handler when user searches and calculates a real route
-  const handleRouteCalculated = (routeFeature, info) => {
-    activeRouteRef.current = routeFeature;
-    setActiveRouteInfo(info);
-    setHasActiveRoute(Boolean(routeFeature?.geometry?.coordinates?.length));
-    loadRouteLayers(routeFeature);
+  const hasActiveRoute = Boolean(routeGeoJson?.geometry?.coordinates?.length);
 
-    if (routeFeature.geometry?.coordinates) {
-      fitMapToBounds(routeFeature.geometry.coordinates);
-    }
-
-    if (onRouteUpdate) {
-      onRouteUpdate(routeFeature);
-    }
-  };
-
-  // Handler to clear active route completely
-  const handleClearRoute = () => {
-    activeRouteRef.current = null;
-    setActiveRouteInfo(null);
-    setHasActiveRoute(false);
-    loadRouteLayers(null);
-
-    if (onRouteUpdate) {
-      onRouteUpdate(null);
-    }
-  };
-
-  // Synchronize when routeGeoJson prop is passed externally from App.jsx
-  useEffect(() => {
-    if (routeGeoJson !== activeRouteRef.current) {
-      activeRouteRef.current = routeGeoJson;
-      setHasActiveRoute(Boolean(routeGeoJson?.geometry?.coordinates?.length));
-      if (map.current && map.current.isStyleLoaded()) {
-        loadRouteLayers(routeGeoJson);
-        if (routeGeoJson?.geometry?.coordinates?.length) {
-          fitMapToBounds(routeGeoJson.geometry.coordinates);
-        }
-      }
-    }
-  }, [routeGeoJson, fitMapToBounds, loadRouteLayers]);
-
-  // Missing Mapbox token safeguard
   if (!MAPBOX_TOKEN) {
     return (
       <div className="roamify-map-wrapper">
         <div className="roamify-token-alert">
           <h3>Mapbox Configuration Required</h3>
-          <p>
-            Please configure your Mapbox public access token in <code>frontend/.env</code> to load map tiles and routing:
-          </p>
+          <p>Configure your Mapbox public token in <code>frontend/.env</code> to load map tiles:</p>
           <code>VITE_MAPBOX_TOKEN=your_mapbox_token_here</code>
-          <p className="roamify-token-hint">
-            Obtain a token at <a href="https://account.mapbox.com/" target="_blank" rel="noreferrer">mapbox.com</a>
-          </p>
         </div>
       </div>
     );
@@ -318,7 +509,7 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
 
   return (
     <div className="roamify-map-wrapper">
-      {/* Mapbox WebGL Canvas Container */}
+      {/* Mapbox Canvas Container */}
       <div ref={mapContainer} className="roamify-map-container" />
 
       {/* Floating Status Notification Toast */}
@@ -336,19 +527,34 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
         </div>
       )}
 
-      {/* Real Route Search Overlay (Start, Destination, Autocomplete, Directions API) */}
-      <RouteSearchOverlay
-        mapboxToken={MAPBOX_TOKEN}
-        userLocation={userLocation}
-        onRouteCalculated={handleRouteCalculated}
-        onClearRoute={handleClearRoute}
-        activeRouteInfo={activeRouteInfo}
-        onNotify={showToast}
-      />
+      {/* Map Legend Overlay (when route is active) */}
+      {hasActiveRoute && (
+        <div className="mapbox-legend-bar" aria-label="Route Map Legend">
+          <div className="legend-entry">
+            <span className="legend-swatch scenic-swatch" />
+            <span>Scenic Detour</span>
+          </div>
+          {directRouteGeoJson && (
+            <div className="legend-entry">
+              <span className="legend-swatch direct-swatch" />
+              <span>Direct Route</span>
+            </div>
+          )}
+          <div className="legend-entry">
+            <span className="legend-dot scenic-dot" />
+            <span>Scenic Stops</span>
+          </div>
+          {customWaypoints.length > 0 && (
+            <div className="legend-entry">
+              <span className="legend-dot waypoint-dot" />
+              <span>Waypoints</span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Floating Canvas Controls Overlay (Bottom-Right) */}
       <div className="roamify-floating-controls">
-        {/* Canvas Actions: Recenter Location, Recenter Route, Toggle 3D Pitch */}
         <div className="roamify-action-controls">
           <button
             type="button"
@@ -373,7 +579,7 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M3 12h3l3-7 6 14 3-7h3" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span>Recenter Route</span>
+            <span>Fit Route</span>
           </button>
 
           <button
@@ -389,7 +595,7 @@ export default function Map({ routeGeoJson, onRouteUpdate }) {
           </button>
         </div>
 
-        {/* Floating Map Style Switcher Widget (Day, Night, Satellite) */}
+        {/* Map Style Switcher Widget */}
         <div className="roamify-style-switcher" role="tablist" aria-label="Map style switcher">
           {MAP_STYLES.map((style) => (
             <button

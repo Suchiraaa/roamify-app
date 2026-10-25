@@ -1,5 +1,7 @@
 {
+  "name": "roamify-app",
   "dependencies": {
+    "@react-google-maps/api": "^2.20.8",
     "mapbox-gl": "^3.33.0"
   }
 }
