@@ -11,7 +11,7 @@ export default function ScenicStopsList({
     );
   }
 
-  consts includedCount = stops.filter((s) => s.is_included !== false).length;
+  const includedCount = stops.filter((s) => s.is_included !== false).length;
 
   return (
     <div className="scenic-stops-section">
