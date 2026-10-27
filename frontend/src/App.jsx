@@ -405,8 +405,50 @@ function App() {
 
       {/* ── Main Application Content ───────────────────────────────────── */}
       <main className="app-main-layout">
+        {/* Hero Section / Landing Banner */}
+        <section className="app-hero-banner" aria-label="Roamify Introduction">
+          <div className="hero-content-wrap">
+            <span className="hero-eyebrow">THE JOURNEY IS THE DESTINATION</span>
+            <h1 className="hero-title">
+              Turn your road trip into <span>an unforgettable exploration.</span>
+            </h1>
+            <p className="hero-subtitle">
+              Roamify intelligently designs scenic routes, discovers breathtaking vistas, cultural landmarks, 
+              local cuisine, and road telemetry — tailored to your time and taste.
+            </p>
+            <div className="hero-actions-row">
+              <button
+                type="button"
+                className="btn-hero-primary"
+                onClick={() => {
+                  const plannerEl = document.getElementById("trip-planner-section");
+                  if (plannerEl) {
+                    plannerEl.scrollIntoView({ behavior: "smooth" });
+                    const firstInput = plannerEl.querySelector("input");
+                    if (firstInput) firstInput.focus();
+                  }
+                }}
+              >
+                🗺️ Plan My Trip
+              </button>
+              <button
+                type="button"
+                className="btn-hero-secondary"
+                onClick={() => {
+                  const mapEl = document.getElementById("primary-map-section");
+                  if (mapEl) {
+                    mapEl.scrollIntoView({ behavior: "smooth" });
+                  }
+                }}
+              >
+                📍 Explore Live Map
+              </button>
+            </div>
+          </div>
+        </section>
+
         {/* Unified Search & Preferences Panel */}
-        <section className="planner-section" aria-label="Trip Configuration">
+        <section id="trip-planner-section" className="planner-section" aria-label="Trip Configuration">
           <UnifiedTripPlanner
             startLocation={startLocation}
             setStartLocation={setStartLocation}
