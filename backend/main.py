@@ -2,10 +2,10 @@ import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-# Load environment variables reliably from backend/.env and parent
+# Load environment variables reliably from backend/.env, parent .env, and default
 backend_dir = Path(__file__).resolve().parent
 load_dotenv(backend_dir / ".env")
 load_dotenv(backend_dir.parent / ".env")
@@ -17,21 +17,40 @@ from models import (
     RecalculateRouteRequest,
     RouteDetails,
     ScenicStop,
-    PresetTrip
+    PresetTrip,
+    TripRequest,
+    ReplanRequest,
+    CopilotChatRequest,
+    WeatherRequest,
+    RouteWeatherRequest,
+    PlacesRecommendationRequest,
+    PlaceItem,
 )
 from ors_service import OpenRouteServiceClient
 from scenic_finder import find_scenic_stops_along_route
+from weather_service import (
+    fetch_current_weather,
+    fetch_forecast,
+    fetch_route_weather,
+)
+from places_service import get_places_recommendations
+from gemini_service import generate_trip_plan, handle_copilot_chat
 
 app = FastAPI(
-    title="Roamify Scenic Routing API",
-    description="FastAPI Backend for Roamify Trip Planner & Scenic Routing with OpenRouteServices",
-    version="1.0.0"
+    title="Roamify Unified API",
+    description="Personalized Navigation & Road-Trip Planning API with Scenic Routing, Weather, Places, and Gemini AI Co-Pilot",
+    version="2.0.0"
 )
 
-# Enable CORS for local development (React Vite at localhost:5173, etc.)
+# CORS middleware for local Vite frontend & client apps
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -78,33 +97,76 @@ PRESET_TRIPS: List[PresetTrip] = [
     )
 ]
 
+
+# ==============================================================================
+# Health & General Status
+# ==============================================================================
+
 @app.get("/")
-def root():
+def home():
     return {
-        "app": "Roamify Scenic Routing API",
+        "service": "Roamify Unified API",
+        "status": "online",
+        "app": "Roamify Scenic Routing & Navigation API",
         "docs": "/docs",
-        "health": "/api/health"
+        "health": "/api/health",
+        "features": {
+            "scenic_routing": "enabled",
+            "gemini_copilot": "enabled",
+            "weather_integration": "enabled",
+            "places_recommendations": "enabled"
+        }
     }
+
 
 @app.get("/favicon.ico", include_in_schema=False)
 def favicon():
-    from fastapi import Response
     return Response(status_code=204)
+
 
 @app.get("/api/health")
 def health_check(x_ors_api_key: Optional[str] = Header(None)):
     key_val = x_ors_api_key if isinstance(x_ors_api_key, str) else None
-    configured = bool(ors_client.get_effective_key(key_val))
+    ors_configured = bool(ors_client.get_effective_key(key_val))
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_configured = bool(gemini_key and not gemini_key.startswith("your_"))
+    weather_key = os.getenv("OPENWEATHER_API_KEY", "").strip()
+    weather_configured = bool(weather_key and not weather_key.startswith("your_"))
+
     return {
         "status": "online",
-        "service": "Roamify Trip Planner & Scenic Routing Engine",
-        "ors_api_key_configured": configured,
-        "mode": "Live OpenRouteService" if configured else "OSRM & Synthetic Fallback (Add ORS_API_KEY for live ORS)"
+        "service": "Roamify Navigation & Road-Trip Platform",
+        "ors_api_key_configured": ors_configured,
+        "mode": "Live OpenRouteService" if ors_configured else "OSRM & Corridor Engine Fallback",
+        "integrations": {
+            "gemini_ai_copilot": {
+                "configured": gemini_configured,
+                "provider": "Google Gemini (gemini-3.5-flash / gemini-3.8-flash)"
+            },
+            "weather_service": {
+                "configured": weather_configured,
+                "provider": "OpenWeatherMap Live API"
+            },
+            "places_service": {
+                "configured": True,
+                "provider": "OpenStreetMap Nominatim & Wikimedia Geosearch"
+            },
+            "scenic_routing": {
+                "ors_configured": ors_configured,
+                "mode": "Live OpenRouteService" if ors_configured else "OSRM & Corridor Engine Fallback"
+            }
+        }
     }
+
 
 @app.get("/api/presets", response_model=List[PresetTrip])
 def get_presets():
     return PRESET_TRIPS
+
+
+# ==============================================================================
+# Member 3: Scenic Routing & Recalculation
+# ==============================================================================
 
 @app.post("/api/plan-trip", response_model=TripPlanResponse)
 async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(None)):
@@ -209,6 +271,7 @@ async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(
         message=f"Discovered {len(scenic_stops)} scenic {req.interest.lower()} stops along your journey corridor."
     )
 
+
 @app.post("/api/recalculate-route", response_model=RouteDetails)
 async def recalculate_route(req: RecalculateRouteRequest, x_ors_api_key: Optional[str] = Header(None)):
     """
@@ -232,6 +295,97 @@ async def recalculate_route(req: RecalculateRouteRequest, x_ors_api_key: Optiona
         segments_count=len(req.waypoint_coords) + 1
     )
 
+
+# ==============================================================================
+# Member 4 - Feature A: AI Co-Pilot (Gemini)
+# ==============================================================================
+
+@app.post("/api/copilot")
+def copilot(trip: TripRequest):
+    return generate_trip_plan(trip)
+
+
+@app.post("/api/replan")
+def replan(request: ReplanRequest):
+    return generate_trip_plan(request, reason=request.reason)
+
+
+@app.post("/api/copilot/chat")
+def copilot_chat(request: CopilotChatRequest):
+    return handle_copilot_chat(request)
+
+
+# ==============================================================================
+# Member 4 - Feature B: Weather Integration
+# ==============================================================================
+
+@app.get("/api/weather/current")
+def get_current_weather(
+    lat: Optional[float] = Query(None),
+    lon: Optional[float] = Query(None),
+    city: Optional[str] = Query(None)
+):
+    return fetch_current_weather(lat=lat, lon=lon, city=city)
+
+
+@app.get("/api/weather/forecast")
+def get_weather_forecast(
+    lat: Optional[float] = Query(None),
+    lon: Optional[float] = Query(None),
+    city: Optional[str] = Query(None)
+):
+    return fetch_forecast(lat=lat, lon=lon, city=city)
+
+
+@app.post("/api/weather/route")
+def get_route_weather(request: RouteWeatherRequest):
+    return fetch_route_weather([p.model_dump() for p in request.points])
+
+
+@app.post("/api/weather")
+def weather_legacy(request: WeatherRequest):
+    """Preserves backwards compatibility with existing WeatherRequest endpoint."""
+    return fetch_current_weather(lat=request.lat, lon=request.lon, city=request.city)
+
+
+# ==============================================================================
+# Member 4 - Feature C: Places & Recommendations
+# ==============================================================================
+
+@app.get("/api/places/recommendations", response_model=List[PlaceItem])
+def get_places_get(
+    category: str = Query("All"),
+    lat: Optional[float] = Query(None),
+    lon: Optional[float] = Query(None),
+    query: Optional[str] = Query(None),
+    radius_km: float = Query(25.0),
+    limit: int = Query(8)
+):
+    return get_places_recommendations(
+        category=category,
+        lat=lat,
+        lon=lon,
+        query=query,
+        radius_km=radius_km,
+        limit=limit
+    )
+
+
+@app.post("/api/places/recommendations", response_model=List[PlaceItem])
+def get_places_post(request: PlacesRecommendationRequest):
+    return get_places_recommendations(
+        category=request.category,
+        lat=request.lat,
+        lon=request.lon,
+        route_coords=request.route_coords,
+        query=request.query,
+        radius_km=request.radius_km,
+        limit=request.limit
+    )
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run("main:app", host=host, port=port, reload=True)
