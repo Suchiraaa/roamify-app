@@ -11,7 +11,7 @@ class TripPlanRequest(BaseModel):
     destination: str = Field(..., description="Destination point or city name")
     interest: str = Field(default="Nature", description="Interest: Nature, Food, Adventure, Culture, Places of worship")
     budget: str = Field(default="Moderate", description="Budget level: Budget-friendly, Moderate, Premium")
-    duration: str = Field(default="3 hours", description="Available time: 1 hour, 3 hours, Half a day, Full day")
+    duration: str = Field(default="3 hours", description="Maximum trip duration: 1 hour, 3 hours, Half a day, Full day")
     profile: str = Field(default="driving-car", description="ORS Profile: driving-car, cycling-regular, foot-walking")
     scenic_factor: str = Field(default="balanced", description="balanced, high, low")
     ors_api_key: Optional[str] = Field(default=None, description="Optional custom OpenRouteService API key")

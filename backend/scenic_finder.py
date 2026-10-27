@@ -1,8 +1,43 @@
 import math
 import random
-from typing import List, Dict, Any, Tuple
+import re
+from typing import List, Dict, Any, Tuple, Optional
 import httpx
 from ors_service import haversine_distance
+
+
+def parse_duration_to_minutes(duration_val: Any) -> float:
+    """
+    Converts a human-readable duration string (e.g. '3 hours', 'Half a day')
+    into total minutes.  Also accepts numeric values (treated as minutes).
+    Returns a sensible default (180 min) for unrecognised input.
+    """
+    if isinstance(duration_val, (int, float)):
+        return float(duration_val)
+    if not duration_val or not isinstance(duration_val, str):
+        return 180.0
+
+    clean = duration_val.strip().lower()
+
+    if "half" in clean:
+        return 240.0          # Half a day ≈ 4 hours
+    if "full" in clean:
+        return 480.0          # Full day ≈ 8 hours
+
+    m_hr = re.search(r"(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)", clean)
+    if m_hr:
+        return float(m_hr.group(1)) * 60.0
+
+    m_min = re.search(r"(\d+(?:\.\d+)?)\s*(?:m|min|mins|minute|minutes)", clean)
+    if m_min:
+        return float(m_min.group(1))
+
+    m_num = re.search(r"(\d+(?:\.\d+)?)", clean)
+    if m_num:
+        val = float(m_num.group(1))
+        return val * 60.0 if val <= 24 else val      # small → hours, large → minutes
+
+    return 180.0
 
 # Curated catalog of famous scenic waypoints along well-known Indian & global corridors
 CURATED_SCENIC_SPOTS = [
