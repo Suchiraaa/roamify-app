@@ -82,8 +82,10 @@ export async function planTrip(tripParams, customApiKey = "") {
 
     return await res.json();
   } catch (error) {
-    // If backend is unreachable, throw clear message or use client fallback
     console.warn("Backend call failed:", error);
+    if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("NetworkError") || error.message.includes("Load failed"))) {
+      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Ensure the backend is running with 'python run.py'.`);
+    }
     throw error;
   }
 }
@@ -94,19 +96,27 @@ export async function recalculateRoute(recalcParams, customApiKey = "") {
     headers["X-ORS-API-Key"] = customApiKey;
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/recalculate-route`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      ...recalcParams,
-      ors_api_key: customApiKey || undefined,
-    }),
-  });
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/recalculate-route`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        ...recalcParams,
+        ors_api_key: customApiKey || undefined,
+      }),
+    });
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new Error(errData.detail || `Recalculation error: ${res.status}`);
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.detail || `Recalculation error: ${res.status}`);
+    }
+
+    return await res.json();
+  } catch (error) {
+    console.warn("Backend recalculate call failed:", error);
+    if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("NetworkError") || error.message.includes("Load failed"))) {
+      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Ensure the backend is running with 'python run.py'.`);
+    }
+    throw error;
   }
-
-  return await res.json();
 }

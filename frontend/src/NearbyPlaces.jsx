@@ -1,6 +1,20 @@
 import { useState } from "react";
+import {
+  CompassIcon,
+  SearchIcon,
+  MapPinIcon,
+  CheckIcon,
+  PlusIcon,
+  AlertTriangleIcon,
+} from "./components/Icons";
 
-function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRemoveWaypoint, onFocusPlace }) {
+function NearbyPlaces({
+  userLocation,
+  activeWaypoints = [],
+  onAddWaypoint,
+  onRemoveWaypoint,
+  onFocusPlace,
+}) {
   const [places, setPlaces] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -56,7 +70,10 @@ function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRem
 
       const data = await response.json();
       const mappedPlaces = (data.features || []).map((feature) => ({
-        id: feature.properties.mapbox_id || feature.id || `${feature.geometry.coordinates[0]}-${feature.geometry.coordinates[1]}`,
+        id:
+          feature.properties.mapbox_id ||
+          feature.id ||
+          `${feature.geometry.coordinates[0]}-${feature.geometry.coordinates[1]}`,
         name: feature.properties.name || "Scenic Attraction",
         address: feature.properties.full_address || feature.properties.place_formatted || "",
         coordinates: feature.geometry.coordinates, // [lng, lat]
@@ -102,8 +119,9 @@ function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRem
     <section className="nearby-places-panel" aria-label="Explore Nearby Places">
       <div className="nearby-header">
         <div>
+          <span className="section-eyebrow">VICINITY EXPLORATION</span>
           <h3 className="panel-title">Explore Nearby Detours</h3>
-          <p className="panel-subtitle">Discover scenic parks, landmarks, and vistas near your position.</p>
+          <p className="panel-subtitle">Discover scenic parks, historical landmarks, and panoramas around your coordinates.</p>
         </div>
         <button
           type="button"
@@ -113,16 +131,21 @@ function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRem
         >
           {loading ? (
             <>
-              <span className="btn-spinner" /> Searching...
+              <span className="btn-spinner" />
+              <span>Locating Places...</span>
             </>
           ) : (
-            "Find Places"
+            <>
+              <SearchIcon size={14} />
+              <span>Find Nearby Places</span>
+            </>
           )}
         </button>
       </div>
 
       {error && (
         <div className="nearby-error-alert" role="alert">
+          <AlertTriangleIcon size={16} className="alert-svg-icon" />
           <span>{error}</span>
         </div>
       )}
@@ -134,7 +157,10 @@ function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRem
             return (
               <article key={place.id} className={`nearby-place-card ${isAdded ? "is-in-trip" : ""}`}>
                 <div className="place-info">
-                  <h4 className="place-name">{place.name}</h4>
+                  <div className="place-title-row">
+                    <CompassIcon size={14} className="place-icon-badge" />
+                    <h4 className="place-name">{place.name}</h4>
+                  </div>
                   {place.address && <p className="place-address">{place.address}</p>}
                 </div>
                 <div className="nearby-actions-group">
@@ -151,7 +177,8 @@ function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRem
                     }
                     title={`Focus ${place.name} on the map`}
                   >
-                    📍 View Map
+                    <MapPinIcon size={13} />
+                    <span>View Map</span>
                   </button>
                   <button
                     type="button"
@@ -159,7 +186,17 @@ function NearbyPlaces({ userLocation, activeWaypoints = [], onAddWaypoint, onRem
                     onClick={() => handleTogglePlace(place)}
                     aria-pressed={isAdded}
                   >
-                    {isAdded ? "In Trip" : "+ Add to Trip"}
+                    {isAdded ? (
+                      <>
+                        <CheckIcon size={13} />
+                        <span>In Trip</span>
+                      </>
+                    ) : (
+                      <>
+                        <PlusIcon size={13} />
+                        <span>Add to Trip</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </article>

@@ -12,6 +12,21 @@ import ApiKeyModal from "./components/ApiKeyModal";
 import Speedometer from "./speedometer.jsx";
 import NearbyPlaces from "./NearbyPlaces.jsx";
 
+// Lucide-compatible vector SVG Icons
+import {
+  CompassIcon,
+  SunIcon,
+  MoonIcon,
+  RouteIcon,
+  MapPinIcon,
+  AlertTriangleIcon,
+  XIcon,
+  ClockIcon,
+  LandmarkIcon,
+  ShieldCheckIcon,
+  GaugeIcon,
+} from "./components/Icons";
+
 // Shared Geolocation Hook
 import { useGeolocation } from "./services/useGeolocation";
 
@@ -49,15 +64,22 @@ function App() {
     document.documentElement.setAttribute("data-theme", theme);
   }, [theme]);
 
-  // ── Unified Trip Planner State (Unplanned initial state) ────────────────
+  // ── Unified Trip Planner State (Supports multi-interest selection) ───────
   const [startLocation, setStartLocation] = useState("");
   const [destination, setDestination] = useState("");
   const [budget, setBudget] = useState("Moderate");
+  const [interests, setInterests] = useState(["Nature"]);
   const [interest, setInterest] = useState("Nature");
   const [duration, setDuration] = useState("3 hours");
   const [profile, setProfile] = useState("driving-car");
 
-  // ── Focused Place for Map View (Task 2) ──────────────────────────────────
+  // Keep single 'interest' string and 'interests' array in sync
+  const handleUpdateInterests = (newInterests) => {
+    setInterests(newInterests);
+    setInterest(newInterests.join(", "));
+  };
+
+  // ── Focused Place for Map View ───────────────────────────────────────────
   const [focusedLocation, setFocusedLocation] = useState(null);
 
   // ── Custom Waypoints (Added from Nearby Places) ──────────────────────────
@@ -126,7 +148,10 @@ function App() {
   const handleSelectPreset = (preset) => {
     setStartLocation(preset.start);
     setDestination(preset.destination);
-    if (preset.interest) setInterest(preset.interest);
+    if (preset.interest) {
+      setInterest(preset.interest);
+      setInterests([preset.interest]);
+    }
     if (preset.duration) setDuration(preset.duration);
     setShowResults(false);
     setMapboxRouteGeoJson(null);
@@ -137,7 +162,7 @@ function App() {
   const handlePlanTrip = async (e) => {
     if (e) e.preventDefault();
     if (!startLocation.trim() || !destination.trim()) {
-      setErrorMsg("Please specify both a starting point and destination.");
+      setErrorMsg("Please specify both a departure point and destination.");
       return;
     }
 
@@ -145,11 +170,14 @@ function App() {
     setErrorMsg("");
 
     try {
+      const selectedInterestString = interests.length > 0 ? interests.join(", ") : "Nature";
+
       const result = await planTrip(
         {
           start_location: startLocation.trim(),
           destination: destination.trim(),
-          interest,
+          interest: selectedInterestString,
+          interests: interests.length > 0 ? interests : ["Nature"],
           budget,
           duration,
           profile,
@@ -301,7 +329,6 @@ function App() {
   const handleAddWaypoint = useCallback((place) => {
     if (!place || !place.coordinates) return;
 
-    // Prevent duplicate additions
     if (customWaypoints.some((wp) => wp.id === place.id)) {
       return;
     }
@@ -316,13 +343,12 @@ function App() {
     const nextWaypoints = [...customWaypoints, newWaypoint];
     setCustomWaypoints(nextWaypoints);
 
-    // If an active trip exists, immediately recalculate route to include this waypoint
     if (tripResult && tripResult.start_location && tripResult.destination) {
       runRouteRecalculation(tripResult.scenic_stops || [], nextWaypoints);
     }
   }, [customWaypoints, tripResult, runRouteRecalculation]);
 
-  // ── Focus Place Handler (Task 2) ─────────────────────────────────────────
+  // ── Focus Place Handler ──────────────────────────────────────────────────
   const handleFocusPlace = useCallback((place) => {
     if (!place) return;
     const lon = Number(place.lon ?? place.longitude ?? place.coordinates?.[0]);
@@ -348,7 +374,7 @@ function App() {
     }
   };
 
-  // Listen for legacy custom event "roamify:add-waypoint"
+  // Listen for custom event "roamify:add-waypoint"
   useEffect(() => {
     const onCustomEvent = (e) => {
       if (e.detail && e.detail.coordinates) {
@@ -365,11 +391,26 @@ function App() {
       <header className="app-navbar">
         <div className="navbar-container">
           <div className="nav-brand-group">
-            <span className="brand-logo-mark" aria-hidden="true">🧭</span>
-            <span className="brand-name">Roamify</span>
-            <span className="brand-divider">/</span>
-            <span className="brand-sub">Scenic Navigation</span>
+            <div className="brand-logo-mark" aria-hidden="true">
+              <CompassIcon size={20} className="brand-compass-svg" />
+            </div>
+            <div className="brand-text-block">
+              <span className="brand-name">Roamify</span>
+              <span className="brand-sub">Scenic Route Atelier</span>
+            </div>
           </div>
+
+          <nav className="nav-links-row" aria-label="Quick Navigation">
+            <a href="#trip-planner-section" className="nav-anchor">
+              Trip Atelier
+            </a>
+            <a href="#primary-map-section" className="nav-anchor">
+              Interactive Map
+            </a>
+            <a href="#editorial-philosophy" className="nav-anchor">
+              Philosophy
+            </a>
+          </nav>
 
           <div className="nav-status-group">
             {/* Day / Night Theme Toggle */}
@@ -380,7 +421,9 @@ function App() {
               title={`Switch to ${theme === "dark" ? "Day" : "Night"} Mode`}
               aria-label="Toggle day and night mode"
             >
-              <span className="theme-toggle-icon">{theme === "dark" ? "🌙" : "☀️"}</span>
+              <span className="theme-toggle-icon">
+                {theme === "dark" ? <MoonIcon size={14} /> : <SunIcon size={14} />}
+              </span>
               <span className="theme-toggle-label">{theme === "dark" ? "Night" : "Day"}</span>
             </button>
 
@@ -405,17 +448,25 @@ function App() {
 
       {/* ── Main Application Content ───────────────────────────────────── */}
       <main className="app-main-layout">
-        {/* Hero Section / Landing Banner */}
+        {/* ── Hero Section / Travel Editorial Experience ─────────────────── */}
         <section className="app-hero-banner" aria-label="Roamify Introduction">
+          <div className="hero-atmosphere-backdrop" aria-hidden="true" />
           <div className="hero-content-wrap">
-            <span className="hero-eyebrow">THE JOURNEY IS THE DESTINATION</span>
+            <div className="hero-eyebrow-container">
+              <CompassIcon size={13} className="hero-eyebrow-compass" />
+              <span className="hero-eyebrow">CURATED SCENIC ROUTING · TRAVEL EDITORIAL</span>
+            </div>
+
             <h1 className="hero-title">
-              Turn your road trip into <span>an unforgettable exploration.</span>
+              Where the journey outshines <em>the destination.</em>
             </h1>
+
             <p className="hero-subtitle">
-              Roamify intelligently designs scenic routes, discovers breathtaking vistas, cultural landmarks, 
-              local cuisine, and road telemetry — tailored to your time and taste.
+              Roamify intelligently orchestrates scenic detours, panoramic vistas, heritage landmarks, 
+              and authentic local flavors along your travel corridor, mathematically constrained within your exact time budget.
             </p>
+
+            {/* TWO Visually Distinct, Prominent Options */}
             <div className="hero-actions-row">
               <button
                 type="button"
@@ -429,8 +480,10 @@ function App() {
                   }
                 }}
               >
-                🗺️ Plan My Trip
+                <RouteIcon size={17} className="btn-icon" />
+                <span>Plan My Trip</span>
               </button>
+
               <button
                 type="button"
                 className="btn-hero-secondary"
@@ -441,13 +494,46 @@ function App() {
                   }
                 }}
               >
-                📍 Explore Live Map
+                <CompassIcon size={17} className="btn-icon" />
+                <span>Explore Live Map</span>
               </button>
+            </div>
+
+            {/* Feature Telemetry Pillars Strip */}
+            <div className="hero-pillars-grid">
+              <div className="hero-pillar-item">
+                <ShieldCheckIcon size={16} className="pillar-icon" />
+                <div>
+                  <strong>Corridor Geometry</strong>
+                  <span>Dynamically scored detours</span>
+                </div>
+              </div>
+              <div className="hero-pillar-item">
+                <ClockIcon size={16} className="pillar-icon" />
+                <div>
+                  <strong>Strict Time Budget</strong>
+                  <span>Zero arrival overshoots</span>
+                </div>
+              </div>
+              <div className="hero-pillar-item">
+                <GaugeIcon size={16} className="pillar-icon" />
+                <div>
+                  <strong>Telemetry HUD</strong>
+                  <span>Real-time device speed</span>
+                </div>
+              </div>
+              <div className="hero-pillar-item">
+                <LandmarkIcon size={16} className="pillar-icon" />
+                <div>
+                  <strong>Verified Places</strong>
+                  <span>OpenStreetMap authenticity</span>
+                </div>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* Unified Search & Preferences Panel */}
+        {/* ── Unified Search & Preferences Panel ────────────────────────── */}
         <section id="trip-planner-section" className="planner-section" aria-label="Trip Configuration">
           <UnifiedTripPlanner
             startLocation={startLocation}
@@ -458,6 +544,8 @@ function App() {
             setBudget={setBudget}
             interest={interest}
             setInterest={setInterest}
+            interests={interests}
+            setInterests={handleUpdateInterests}
             duration={duration}
             setDuration={setDuration}
             profile={profile}
@@ -474,7 +562,7 @@ function App() {
         {/* Global Error Banner */}
         {errorMsg && (
           <div className="error-alert-banner" role="alert">
-            <span className="alert-icon">⚠️</span>
+            <AlertTriangleIcon size={18} className="alert-icon-svg" />
             <div className="alert-body">
               <strong>Calculation Error:</strong> {errorMsg}
             </div>
@@ -484,13 +572,23 @@ function App() {
               onClick={() => setErrorMsg("")}
               aria-label="Dismiss error"
             >
-              ✕
+              <XIcon size={14} />
             </button>
           </div>
         )}
 
         {/* ── Primary Map Section (Single Mapbox Canvas) ────────────────── */}
         <section id="primary-map-section" className="primary-map-section" aria-label="Interactive Route Map">
+          <div className="map-section-header">
+            <div>
+              <span className="section-eyebrow">CARTOGRAPHIC CANVAS</span>
+              <h2 className="map-section-title">Interactive Corridor Map</h2>
+            </div>
+            <div className="map-section-actions">
+              <span className="map-projection-tag">Mapbox GL · WGS84 Projection</span>
+            </div>
+          </div>
+
           <div className="map-viewport-frame">
             <Map
               routeGeoJson={mapboxRouteGeoJson}
@@ -523,7 +621,10 @@ function App() {
         {/* ── Active Waypoints Bar (Chips) ──────────────────────────────── */}
         {customWaypoints.length > 0 && (
           <section className="active-waypoints-strip" aria-label="Trip Waypoints">
-            <span className="waypoints-label">Active Waypoints ({customWaypoints.length}):</span>
+            <div className="waypoints-strip-header">
+              <MapPinIcon size={15} className="waypoints-header-icon" />
+              <span className="waypoints-label">Active Custom Waypoints ({customWaypoints.length}):</span>
+            </div>
             <div className="waypoints-chip-list">
               {customWaypoints.map((wp) => (
                 <div key={wp.id} className="waypoint-chip">
@@ -535,7 +636,7 @@ function App() {
                     title={`Remove ${wp.name} from trip`}
                     aria-label={`Remove ${wp.name}`}
                   >
-                    ✕
+                    <XIcon size={12} />
                   </button>
                 </div>
               ))}
@@ -548,13 +649,17 @@ function App() {
           <section id="route-summary-section" className="results-container">
             <div className="results-header-bar">
               <div>
-                <span className="results-eyebrow">SCENIC DETOUR ITINERARY</span>
+                <span className="results-eyebrow">CURATED DETOUR ITINERARY</span>
                 <h2 className="results-title">
                   {tripResult.start_location.name} → {tripResult.destination.name}
                 </h2>
               </div>
               <div className="results-meta-pill">
-                {interest} focus · {budget} budget · {duration}
+                <span>{interests.join(" + ")} focus</span>
+                <span className="meta-dot">·</span>
+                <span>{budget} budget</span>
+                <span className="meta-dot">·</span>
+                <span>{duration}</span>
               </div>
             </div>
 
@@ -589,6 +694,49 @@ function App() {
           onRemoveWaypoint={handleRemoveWaypoint}
           onFocusPlace={handleFocusPlace}
         />
+
+        {/* ── Editorial Philosophy Section (Authentic Content, No Fabrications) ─ */}
+        <section id="editorial-philosophy" className="editorial-philosophy-section" aria-label="Roamify Philosophy">
+          <div className="philosophy-header">
+            <span className="section-eyebrow">THE CRAFT OF SCENIC TRAVEL</span>
+            <h2 className="philosophy-title">How Roamify Orchestrates Every Road</h2>
+            <p className="philosophy-subtitle">
+              Traditional GPS applications prioritize the fastest route through monotonous highways. Roamify rebalances the equation: finding the most scenic path while honoring your arrival time.
+            </p>
+          </div>
+
+          <div className="philosophy-cards-grid">
+            <article className="philosophy-card">
+              <div className="philosophy-icon-badge">
+                <RouteIcon size={20} />
+              </div>
+              <h3 className="philosophy-card-title">Elliptical Corridor Geometry</h3>
+              <p className="philosophy-card-desc">
+                Instead of searching blindly across whole states, Roamify projects an adaptive elliptical corridor between your origin and destination. It identifies high-value waypoints within reach, avoiding unnecessary doubling back.
+              </p>
+            </article>
+
+            <article className="philosophy-card">
+              <div className="philosophy-icon-badge">
+                <ClockIcon size={20} />
+              </div>
+              <h3 className="philosophy-card-title">Mathematical Detour Caps</h3>
+              <p className="philosophy-card-desc">
+                Whether you have an extra hour or a full day to spare, our iterative constraint solver guarantees that the calculated scenic route will not exceed your specified time limit. No unexpected delays.
+              </p>
+            </article>
+
+            <article className="philosophy-card">
+              <div className="philosophy-icon-badge">
+                <ShieldCheckIcon size={20} />
+              </div>
+              <h3 className="philosophy-card-title">Verified Open Source Cartography</h3>
+              <p className="philosophy-card-desc">
+                Powered by OpenRouteServices, OpenStreetMap, and Mapbox GL, all coordinates, road segments, and elevation contours are computed from live geospatial data. No fabricated points of interest.
+              </p>
+            </article>
+          </div>
+        </section>
       </main>
 
       {/* ── ORS API Key Settings Modal ─────────────────────────────────── */}
@@ -602,9 +750,30 @@ function App() {
 
       {/* ── Application Footer ─────────────────────────────────────────── */}
       <footer className="app-footer">
-        <p>
-          Roamify © 2026 · Powered by <strong>OpenRouteServices</strong> &amp; OpenStreetMap · Map engine by <strong>Mapbox</strong>.
-        </p>
+        <div className="footer-container">
+          <div className="footer-brand-column">
+            <div className="footer-brand-title">
+              <CompassIcon size={18} className="footer-compass-svg" />
+              <span>Roamify Atelier</span>
+            </div>
+            <p className="footer-tagline">
+              Curated scenic routing, corridor discovery, and road telemetry for thoughtful travelers.
+            </p>
+          </div>
+
+          <div className="footer-meta-column">
+            <div className="footer-tech-stack">
+              <span>Map Engine: <strong>Mapbox GL</strong></span>
+              <span className="footer-sep">·</span>
+              <span>Routing Engine: <strong>OpenRouteService</strong></span>
+              <span className="footer-sep">·</span>
+              <span>Cartography: <strong>OpenStreetMap</strong></span>
+            </div>
+            <p className="footer-copyright">
+              Roamify © 2026 · Designed for scenic exploration
+            </p>
+          </div>
+        </div>
       </footer>
     </div>
   );

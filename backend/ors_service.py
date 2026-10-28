@@ -1,46 +1,15 @@
 import math
 import os
 import re
+from pathlib import Path
 from typing import List, Tuple, Dict, Any, Optional
+from urllib.parse import quote
 import httpx
+from dotenv import load_dotenv
 
 ORS_BASE_URL = "https://api.openrouteservice.org"
 OSRM_BASE_URL = "https://router.project-osrm.org"
 
-# Instant local dictionary for popular travel hubs and presets (guarantees zero downtime)
-COMMON_LOCATIONS: Dict[str, Tuple[float, float, str]] = {
-    "bengaluru": (12.9716, 77.5946, "Bengaluru, Karnataka, India"),
-    "bangalore": (12.9716, 77.5946, "Bengaluru, Karnataka, India"),
-    "mysuru": (12.2958, 76.6394, "Mysuru, Karnataka, India"),
-    "mysore": (12.2958, 76.6394, "Mysuru, Karnataka, India"),
-    "mumbai": (19.0760, 72.8777, "Mumbai, Maharashtra, India"),
-    "pune": (18.5204, 73.8567, "Pune, Maharashtra, India"),
-    "delhi": (28.6139, 77.2090, "Delhi, India"),
-    "new delhi": (28.6139, 77.2090, "New Delhi, Delhi, India"),
-    "agra": (27.1767, 78.0081, "Agra, Uttar Pradesh, India"),
-    "jaipur": (26.9124, 75.7873, "Jaipur, Rajasthan, India"),
-    "goa": (15.2993, 74.1240, "Goa, India"),
-    "panaji": (15.4909, 73.8278, "Panaji, Goa, India"),
-    "hyderabad": (17.3850, 78.4867, "Hyderabad, Telangana, India"),
-    "chennai": (13.0827, 80.2707, "Chennai, Tamil Nadu, India"),
-    "kolkata": (22.5726, 88.3639, "Kolkata, West Bengal, India"),
-    "ooty": (11.4102, 76.6950, "Ooty, Tamil Nadu, India"),
-    "coorg": (12.4244, 75.7382, "Coorg, Karnataka, India"),
-    "madikeri": (12.4244, 75.7382, "Madikeri, Coorg, Karnataka, India"),
-    "kochi": (9.9312, 76.2673, "Kochi, Kerala, India"),
-    "munnar": (10.0889, 77.0595, "Munnar, Kerala, India"),
-    "san francisco": (37.7749, -122.4194, "San Francisco, California, USA"),
-    "big sur": (36.2704, -121.8081, "Big Sur, California, USA"),
-    "los angeles": (34.0522, -118.2437, "Los Angeles, California, USA"),
-    "new york": (40.7128, -74.0060, "New York, USA"),
-    "london": (51.5074, -0.1278, "London, United Kingdom"),
-    "paris": (48.8566, 2.3522, "Paris, France"),
-    "ramadevara": (12.7231, 77.2917, "Ramadevara Betta, Karnataka"),
-    "ramanagara": (12.7209, 77.2799, "Ramanagara, Karnataka, India"),
-    "channapatna": (12.6517, 77.2089, "Channapatna, Karnataka, India"),
-    "mandya": (12.5226, 76.8976, "Mandya, Karnataka, India"),
-    "srirangapatna": (12.4241, 76.6950, "Srirangapatna, Karnataka, India")
-}
 
 def haversine_distance(coord1: Tuple[float, float], coord2: Tuple[float, float]) -> float:
     """
@@ -58,57 +27,100 @@ def haversine_distance(coord1: Tuple[float, float], coord2: Tuple[float, float])
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+
 class OpenRouteServiceClient:
     def __init__(self, default_api_key: Optional[str] = None):
-        from pathlib import Path
-        from dotenv import load_dotenv
         backend_dir = Path(__file__).resolve().parent
         load_dotenv(backend_dir / ".env")
         load_dotenv(backend_dir.parent / ".env")
+        load_dotenv(backend_dir.parent / "frontend" / ".env")
         load_dotenv()
+
         self.default_api_key = (
             default_api_key
             or os.getenv("ORS_API_KEY", "").strip()
+            or os.getenv("OPENROUTESERVICE_API_KEY", "").strip()
+            or os.getenv("ORS_KEY", "").strip()
             or os.getenv("VITE_ORS_API_KEY", "").strip()
+        )
+        self.mapbox_token = (
+            os.getenv("MAPBOX_TOKEN", "").strip()
+            or os.getenv("VITE_MAPBOX_TOKEN", "").strip()
+            or os.getenv("MAPBOX_ACCESS_TOKEN", "").strip()
         )
 
     def get_effective_key(self, custom_key: Optional[str] = None) -> Optional[str]:
         if custom_key and isinstance(custom_key, str) and custom_key.strip():
-            return custom_key.strip()
-        if self.default_api_key:
+            key = custom_key.strip()
+            if not key.startswith("your_"):
+                return key
+        if self.default_api_key and not self.default_api_key.startswith("your_"):
             return self.default_api_key
         return None
 
     async def geocode(self, query: str, custom_key: Optional[str] = None) -> Dict[str, Any]:
         """
-        Geocodes a location name to { name, lat, lon, display_name }.
-        Tier 1: Instant local dictionary lookup.
-        Tier 2: OpenRouteService Geocoding (if key provided).
-        Tier 3: Photon OSM Geocoding (high reliability, no strict user-agent blocking).
-        Tier 4: Nominatim OpenStreetMap (with browser headers & simplified tokens).
+        Global geocoding pipeline supporting valid cities, towns, villages, landmarks,
+        tourist attractions, and street addresses worldwide.
+        
+        Tier 1: Direct Coordinate Recognition (e.g., '12.9716, 77.5946')
+        Tier 2: Mapbox Geocoding API (high-accuracy global landmarks, POIs, and addresses)
+        Tier 3: OpenRouteService Geocoding (if active ORS API key is configured)
+        Tier 4: Photon OSM API (fuzzy/typo-tolerant OpenStreetMap geocoding)
+        Tier 5: Nominatim OpenStreetMap (comprehensive worldwide street/village geocoding)
         """
-        clean_q = query.strip().lower()
+        clean_q = query.strip()
+        if not clean_q:
+            raise ValueError("Location query cannot be empty.")
 
-        # Tier 1: Check instant local dictionary
-        for key, (lat, lon, label) in COMMON_LOCATIONS.items():
-            if key in clean_q or clean_q in key:
-                return {
-                    "name": query.split(",")[0].strip(),
-                    "display_name": label,
-                    "lon": lon,
-                    "lat": lat,
-                    "source": "Local Geocache"
-                }
+        # ── Tier 1: Direct Coordinate Input ──────────────────────────────────
+        if "," in clean_q:
+            parts = [p.strip() for p in clean_q.split(",")]
+            if len(parts) == 2:
+                try:
+                    lat_val = float(parts[0])
+                    lon_val = float(parts[1])
+                    if -90.0 <= lat_val <= 90.0 and -180.0 <= lon_val <= 180.0:
+                        return {
+                            "name": f"{lat_val:.4f}, {lon_val:.4f}",
+                            "display_name": f"Coordinates ({lat_val:.4f}, {lon_val:.4f})",
+                            "lon": lon_val,
+                            "lat": lat_val,
+                            "source": "Direct Coordinates",
+                        }
+                except ValueError:
+                    pass
 
+        # ── Tier 2: Mapbox Places Geocoding (Global Landmarks, Towns, Addresses) ──
+        if self.mapbox_token:
+            try:
+                encoded_q = quote(clean_q)
+                url = f"https://api.mapbox.com/geocoding/v5/mapbox.places/{encoded_q}.json"
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(url, params={"access_token": self.mapbox_token, "limit": 1})
+                    if resp.status_code == 200:
+                        feats = resp.json().get("features", [])
+                        if feats:
+                            f = feats[0]
+                            coords = f["geometry"]["coordinates"] # [lon, lat]
+                            return {
+                                "name": f.get("text") or clean_q.split(",")[0].strip(),
+                                "display_name": f.get("place_name") or clean_q,
+                                "lon": float(coords[0]),
+                                "lat": float(coords[1]),
+                                "source": "Mapbox Places",
+                            }
+            except Exception as e:
+                print(f"[Mapbox Geocode Notice]: {e}")
+
+        # ── Tier 3: OpenRouteService Geocoding ───────────────────────────────
         api_key = self.get_effective_key(custom_key)
-
-        # Tier 2: OpenRouteService Geocoding if key is available
         if api_key:
             try:
                 async with httpx.AsyncClient(timeout=8.0) as client:
                     resp = await client.get(
                         f"{ORS_BASE_URL}/geocode/search",
-                        params={"api_key": api_key, "text": query, "size": 1}
+                        params={"api_key": api_key, "text": clean_q, "size": 1}
                     )
                     if resp.status_code == 200:
                         data = resp.json()
@@ -118,58 +130,59 @@ class OpenRouteServiceClient:
                             coords = feat["geometry"]["coordinates"] # [lon, lat]
                             props = feat.get("properties", {})
                             return {
-                                "name": props.get("name", query),
-                                "display_name": props.get("label", query),
+                                "name": props.get("name") or clean_q.split(",")[0].strip(),
+                                "display_name": props.get("label") or clean_q,
                                 "lon": float(coords[0]),
                                 "lat": float(coords[1]),
-                                "source": "OpenRouteService Geocode"
+                                "source": "OpenRouteService",
                             }
             except Exception as e:
-                print(f"[ORS Geocode Error] {e}")
+                print(f"[ORS Geocode Notice]: {e}")
 
-        # Tier 3: Photon OSM API (Fast, free OpenStreetMap geocoding with no email restrictions)
-        try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                resp = await client.get(
-                    "https://photon.komoot.io/api/",
-                    params={"q": query, "limit": 1}
-                )
-                if resp.status_code == 200:
-                    data = resp.json()
-                    feats = data.get("features", [])
-                    if feats:
-                        f = feats[0]
-                        coords = f["geometry"]["coordinates"]
-                        p = f.get("properties", {})
-                        city_name = p.get("name") or query.split(",")[0]
-                        country = p.get("country", "")
-                        state = p.get("state", "")
-                        disp = ", ".join(filter(bool, [city_name, state, country])) or query
-                        return {
-                            "name": city_name,
-                            "display_name": disp,
-                            "lon": float(coords[0]),
-                            "lat": float(coords[1]),
-                            "source": "Photon OSM"
-                        }
-        except Exception as e:
-            print(f"[Photon Geocode Error] {e}")
+        # ── Tier 4: Photon OSM API (Fuzzy, typo-tolerant OpenStreetMap) ─────
+        queries_to_try = [clean_q]
+        if "," in clean_q:
+            queries_to_try.append(clean_q.split(",")[0].strip())
 
-        # Tier 4: Nominatim OSM Geocoding (with realistic User-Agent)
+        for q_candidate in queries_to_try:
+            try:
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    resp = await client.get(
+                        "https://photon.komoot.io/api/",
+                        params={"q": q_candidate, "limit": 1}
+                    )
+                    if resp.status_code == 200:
+                        feats = resp.json().get("features", [])
+                        if feats:
+                            f = feats[0]
+                            coords = f["geometry"]["coordinates"] # [lon, lat]
+                            props = f.get("properties", {})
+                            loc_name = props.get("name") or q_candidate
+                            country = props.get("country", "")
+                            state = props.get("state", "")
+                            city = props.get("city", "")
+                            disp = ", ".join(filter(bool, [loc_name, city, state, country])) or q_candidate
+                            return {
+                                "name": loc_name,
+                                "display_name": disp,
+                                "lon": float(coords[0]),
+                                "lat": float(coords[1]),
+                                "source": "Photon OSM",
+                            }
+            except Exception as e:
+                print(f"[Photon Geocode Notice]: {e}")
+
+        # ── Tier 5: Nominatim OpenStreetMap (Exhaustive Global Cartography) ──
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Roamify/1.0",
+            "User-Agent": "RoamifyTravelPlatform/2.0 (contact: info@roamify.app)",
             "Accept-Language": "en"
         }
-        queries_to_try = [query]
-        if "," in query:
-            queries_to_try.append(query.split(",")[0].strip())
-
-        for q_try in queries_to_try:
+        for q_candidate in queries_to_try:
             try:
                 async with httpx.AsyncClient(timeout=8.0) as client:
                     resp = await client.get(
                         "https://nominatim.openstreetmap.org/search",
-                        params={"q": q_try, "format": "json", "limit": 1},
+                        params={"q": q_candidate, "format": "jsonv2", "addressdetails": 1, "limit": 1},
                         headers=headers
                     )
                     if resp.status_code == 200:
@@ -177,17 +190,17 @@ class OpenRouteServiceClient:
                         if results:
                             item = results[0]
                             return {
-                                "name": item.get("name") or q_try,
-                                "display_name": item.get("display_name", q_try),
+                                "name": item.get("name") or q_candidate,
+                                "display_name": item.get("display_name", q_candidate),
                                 "lon": float(item["lon"]),
                                 "lat": float(item["lat"]),
-                                "source": "Nominatim OSM"
+                                "source": "Nominatim OSM",
                             }
             except Exception as e:
-                print(f"[Nominatim Error on '{q_try}'] {e}")
+                print(f"[Nominatim Notice on '{q_candidate}']: {e}")
 
         raise ValueError(
-            f"Could not locate destination: '{query}'. Try a shorter city name, e.g. 'Bengaluru' or 'Mysuru'."
+            f"Could not locate '{clean_q}'. Please check spelling or specify a nearby city or country (e.g., 'Paris, France' or 'Zermatt, Switzerland')."
         )
 
     async def get_directions(

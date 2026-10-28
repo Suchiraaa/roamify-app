@@ -1,3 +1,5 @@
+import { ArrowUpDownIcon } from "./Icons";
+
 export default function TripPlannerForm({
   startLocation,
   setStartLocation,
@@ -43,7 +45,7 @@ export default function TripPlannerForm({
                 className="preset-chip"
                 onClick={() => onSelectPreset(preset)}
               >
-                📍 {preset.title}
+                {preset.title}
               </button>
             ))}
           </div>
@@ -55,7 +57,7 @@ export default function TripPlannerForm({
           <div className="input-field">
             <label htmlFor="startLocation">Where are you starting from?</label>
             <div className="input-with-icon">
-              <span className="input-icon">🟢</span>
+              <span className="input-icon">A</span>
               <input
                 id="startLocation"
                 value={startLocation}
@@ -71,14 +73,15 @@ export default function TripPlannerForm({
             className="swap-locations-btn"
             onClick={handleSwap}
             title="Swap start and destination"
+            aria-label="Swap locations"
           >
-            ⇄
+            <ArrowUpDownIcon size={14} />
           </button>
 
           <div className="input-field">
             <label htmlFor="destination">Where are you heading?</label>
             <div className="input-with-icon">
-              <span className="input-icon">🏁</span>
+              <span className="input-icon">B</span>
               <input
                 id="destination"
                 value={destination}
@@ -98,11 +101,11 @@ export default function TripPlannerForm({
               value={interest}
               onChange={(e) => setInterest(e.target.value)}
             >
-              <option value="Nature">🌿 Nature & Panoramas</option>
-              <option value="Food">🍜 Local Food & Culinary</option>
-              <option value="Culture">🏛️ Heritage & Culture</option>
-              <option value="Adventure">🧭 Adventure & Outdoors</option>
-              <option value="Places of worship">🛕 Places of Worship</option>
+              <option value="Nature">Nature & Panoramas</option>
+              <option value="Food">Local Food & Culinary</option>
+              <option value="Culture">Heritage & Culture</option>
+              <option value="Adventure">Adventure & Outdoors</option>
+              <option value="Places of worship">Places of Worship</option>
             </select>
           </div>
 
@@ -113,9 +116,9 @@ export default function TripPlannerForm({
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
             >
-              <option value="Budget-friendly">🪙 Budget-friendly</option>
-              <option value="Moderate">💵 Moderate</option>
-              <option value="Premium">💎 Premium Experience</option>
+              <option value="Budget-friendly">Budget-friendly</option>
+              <option value="Moderate">Moderate</option>
+              <option value="Premium">Premium Experience</option>
             </select>
           </div>
 
@@ -126,10 +129,10 @@ export default function TripPlannerForm({
               value={duration}
               onChange={(e) => setDuration(e.target.value)}
             >
-              <option value="1 hour">⏱️ 1 hour detour</option>
-              <option value="3 hours">⏱️ 3 hours detour</option>
-              <option value="Half a day">⏱️ Half a day (4 hrs)</option>
-              <option value="Full day">⏱️ Full day (8+ hrs)</option>
+              <option value="1 hour">1 hour detour</option>
+              <option value="3 hours">3 hours detour</option>
+              <option value="Half a day">Half a day (4 hrs)</option>
+              <option value="Full day">Full day (8+ hrs)</option>
             </select>
           </div>
 
@@ -140,9 +143,9 @@ export default function TripPlannerForm({
               value={profile}
               onChange={(e) => setProfile(e.target.value)}
             >
-              <option value="driving-car">🚗 Driving (Car)</option>
-              <option value="cycling-regular">🚲 Cycling</option>
-              <option value="foot-walking">🚶 Walking / Hiking</option>
+              <option value="driving-car">Driving (Car)</option>
+              <option value="cycling-regular">Cycling</option>
+              <option value="foot-walking">Walking / Hiking</option>
             </select>
           </div>
         </div>
@@ -157,7 +160,7 @@ export default function TripPlannerForm({
               <span className="spinner"></span> Routing with OpenRouteServices...
             </span>
           ) : (
-            "Find Scenic Routes & Detours →"
+            "Find Scenic Routes & Detours"
           )}
         </button>
       </form>

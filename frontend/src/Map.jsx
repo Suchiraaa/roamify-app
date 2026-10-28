@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import './Map.css';
+import { CrosshairIcon, RouteIcon, BoxIcon, XIcon } from './components/Icons';
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
 if (MAPBOX_TOKEN) {
@@ -132,9 +133,9 @@ export default function Map({
           'line-cap': 'round'
         },
         paint: {
-          'line-color': '#059669',
-          'line-width': 10,
-          'line-opacity': 0.3
+          'line-color': '#1E293B',
+          'line-width': 8,
+          'line-opacity': 0.2
         }
       });
     }
@@ -149,8 +150,8 @@ export default function Map({
           'line-cap': 'round'
         },
         paint: {
-          'line-color': '#10b981',
-          'line-width': 5,
+          'line-color': '#BA6E65',
+          'line-width': 4.5,
           'line-opacity': 0.95
         }
       });
@@ -272,7 +273,7 @@ export default function Map({
 
       const el = document.createElement('div');
       el.className = 'custom-mapbox-marker marker-custom-waypoint';
-      el.innerHTML = '<span class="marker-symbol">★</span>';
+      el.innerHTML = '<span class="marker-symbol"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 22 12 12 22 2 12"/></svg></span>';
 
       const popupNode = document.createElement('div');
       popupNode.className = 'marker-popup-content';
@@ -522,7 +523,7 @@ export default function Map({
             onClick={() => setToastMessage(null)}
             aria-label="Close notification"
           >
-            ✕
+            <XIcon size={12} />
           </button>
         </div>
       )}
@@ -562,10 +563,7 @@ export default function Map({
             title="Recenter to my live GPS location"
             onClick={handleRecenterLocation}
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
-            </svg>
+            <CrosshairIcon size={14} />
             <span>My Location</span>
           </button>
 
@@ -576,9 +574,7 @@ export default function Map({
             onClick={handleRecenterRoute}
             disabled={!hasActiveRoute}
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h3l3-7 6 14 3-7h3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <RouteIcon size={14} />
             <span>Fit Route</span>
           </button>
 
@@ -588,9 +584,7 @@ export default function Map({
             title="Toggle 2D / 3D camera tilt"
             onClick={handleTogglePitch}
           >
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <BoxIcon size={14} />
             <span>{is3D ? '3D View' : '2D View'}</span>
           </button>
         </div>

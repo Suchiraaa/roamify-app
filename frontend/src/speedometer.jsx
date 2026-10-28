@@ -1,4 +1,4 @@
-import './App.css';
+import { GaugeIcon } from "./components/Icons";
 
 /**
  * Speedometer Component
@@ -6,16 +6,22 @@ import './App.css';
  * Can receive telemetry via props (shared location) or run standalone.
  */
 function Speedometer({ speed, status, isLive }) {
-  // If no props passed, display waiting state gracefully
-  const displaySpeed = speed !== null && speed !== undefined ? speed : '--';
-  const displayStatus = status || 'Waiting for location';
+  const displaySpeed = speed !== null && speed !== undefined ? speed : "--";
+  const displayStatus = status || "Waiting for GPS lock";
   const hasLiveSignal = Boolean(isLive);
 
   return (
     <aside className="speedometer-hud" aria-label="Live Speedometer Telemetry">
       <div className="speedometer-top">
-        <span className="speedometer-label">SPEED</span>
-        <div className={`speedometer-dot ${hasLiveSignal ? 'dot-active' : 'dot-idle'}`} title={displayStatus} />
+        <div className="speedometer-title-group">
+          <GaugeIcon size={12} className="speedometer-svg" />
+          <span className="speedometer-label">TELEMETRY</span>
+        </div>
+        <div
+          className={`speedometer-dot ${hasLiveSignal ? "dot-active" : "dot-idle"}`}
+          title={displayStatus}
+          aria-hidden="true"
+        />
       </div>
 
       <div className="speedometer-value-row">

@@ -18,13 +18,13 @@ CATEGORY_KEYWORDS = {
 }
 
 CATEGORY_ICONS = {
-    "Viewpoints": "🌄",
-    "Nature": "🌿",
-    "Food": "🍽️",
-    "Attractions": "✨",
-    "Culture": "🏛️",
-    "Worship": "🛕",
-    "All": "📍"
+    "Viewpoints": "viewpoint",
+    "Nature": "nature",
+    "Food": "food",
+    "Attractions": "attraction",
+    "Culture": "culture",
+    "Worship": "worship",
+    "All": "pin"
 }
 
 
@@ -266,7 +266,7 @@ def get_places_recommendations(
             else:
                 mapped_cat = "Attractions"
 
-        icon = CATEGORY_ICONS.get(mapped_cat, "📍")
+        icon = CATEGORY_ICONS.get(mapped_cat, "pin")
 
         processed.append({
             "id": f"rec-{p['osm_id']}",

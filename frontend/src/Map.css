@@ -192,7 +192,7 @@
 }
 
 .roamify-dot-start {
-  background-color: #10b981;
+  background-color: #BA6E65;
 }
 
 .roamify-dot-line {
@@ -538,9 +538,10 @@
 }
 
 .roamify-control-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #ffffff;
+  background: #283548;
+  border-color: #BA6E65;
+  color: #F8ECE9;
+  box-shadow: none;
 }
 
 .roamify-control-btn.disabled,
@@ -581,8 +582,11 @@
 }
 
 .roamify-style-btn.active {
-  background: #2563eb;
-  color: #ffffff;
+  background: #283548;
+  color: #BA6E65;
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(197, 160, 89, 0.35);
 }
 
 /* Mapbox Built-in Controls Adjustments */
@@ -694,52 +698,57 @@
 }
 
 .marker-start {
-  background: #10b981;
+  background: #283548;
+  border-color: #BA6E65 !important;
 }
 
 .marker-dest {
-  background: #ef4444;
+  background: #A85A4E;
+  border-color: #FAF8F5 !important;
 }
 
 .marker-scenic-stop.is-included {
-  background: #f59e0b;
+  background: #BA6E65;
+  border-color: #283548 !important;
+  color: #1E293B !important;
 }
 
 .marker-scenic-stop.is-excluded {
   background: #64748b;
-  opacity: 0.75;
+  opacity: 0.65;
 }
 
 .marker-custom-waypoint {
-  background: #6366f1;
+  background: #475569;
+  border-color: #BA6E65 !important;
 }
 
 /* Mapbox Popup Overrides */
 .mapboxgl-popup-content {
-  background: #0f172a !important;
-  color: #f8fafc !important;
-  border-radius: 12px !important;
-  padding: 14px 16px !important;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: #1E293B !important;
+  color: #FAF8F5 !important;
+  border-radius: 14px !important;
+  padding: 16px 18px !important;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55) !important;
+  border: 1px solid rgba(197, 160, 89, 0.35) !important;
   font-family: inherit !important;
-  max-width: 280px !important;
+  max-width: 290px !important;
 }
 
 .mapboxgl-popup-anchor-top .mapboxgl-popup-tip {
-  border-bottom-color: #0f172a !important;
+  border-bottom-color: #1E293B !important;
 }
 
 .mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip {
-  border-top-color: #0f172a !important;
+  border-top-color: #1E293B !important;
 }
 
 .mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
-  border-right-color: #0f172a !important;
+  border-right-color: #1E293B !important;
 }
 
 .mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
-  border-left-color: #0f172a !important;
+  border-left-color: #1E293B !important;
 }
 
 .mapboxgl-popup-close-button {
@@ -771,7 +780,7 @@
 }
 
 .origin-tag {
-  color: #34d399;
+  color: #BA6E65;
 }
 
 .dest-tag {
@@ -832,21 +841,24 @@
 }
 
 .btn-add-stop {
-  background: #059669;
-  color: #ffffff;
+  background: #283548;
+  color: #F8ECE9;
+  border: 1px solid #BA6E65;
 }
 
 .btn-add-stop:hover {
-  background: #047857;
+  background: #334155;
+  border-color: #C48B81;
 }
 
 .btn-remove-stop {
-  background: #ef4444;
-  color: #ffffff;
+  background: rgba(168, 90, 78, 0.25);
+  color: #F8ECE9;
+  border: 1px solid #C27D72;
 }
 
 .btn-remove-stop:hover {
-  background: #dc2626;
+  background: rgba(168, 90, 78, 0.4);
 }
 
 /* Route Map Legend Bar (Overlaid on bottom-left of Map) */
@@ -857,17 +869,17 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  background: rgba(15, 23, 42, 0.88);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 6px 12px;
+  background: rgba(14, 36, 27, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(197, 160, 89, 0.28);
+  border-radius: 10px;
+  padding: 8px 14px;
   font-size: 11px;
   font-weight: 500;
-  color: #cbd5e1;
+  color: #FAF8F5;
   z-index: 10;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .legend-entry {
@@ -884,7 +896,7 @@
 }
 
 .scenic-swatch {
-  background: #10b981;
+  background: #BA6E65;
 }
 
 .direct-swatch {

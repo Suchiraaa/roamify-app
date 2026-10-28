@@ -1,7 +1,7 @@
 import math
 import random
 import re
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Union, Set
 import httpx
 from ors_service import haversine_distance
 
@@ -48,7 +48,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 15.3144,
         "lon": 74.3143,
         "description": "Spectacular 310-metre white cascade plunging through dense Western Ghats jungle on the Goa border.",
-        "icon": "💧",
+        "icon": "nature",
         "budget": "Budget-friendly",
         "detour_min": 40,
         "scenic_score": 4.9
@@ -59,7 +59,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 14.5833,
         "lon": 74.5500,
         "description": "Two monolithic black crystalline rocks towering over evergreen forests with mystical cave trails.",
-        "icon": "🌄",
+        "icon": "nature",
         "budget": "Budget-friendly",
         "detour_min": 35,
         "scenic_score": 4.8
@@ -70,7 +70,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 14.2285,
         "lon": 74.8122,
         "description": "India's legendary untiered waterfall where the Sharavathi river plunges 253 metres into a misty chasm.",
-        "icon": "💧",
+        "icon": "nature",
         "budget": "Budget-friendly",
         "detour_min": 45,
         "scenic_score": 4.9
@@ -81,7 +81,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 14.0944,
         "lon": 74.4849,
         "description": "Colossal 123-ft coastal Shiva statue perched on a seaside hill surrounded by the Arabian Sea on three sides.",
-        "icon": "🛕",
+        "icon": "worship",
         "budget": "Budget-friendly",
         "detour_min": 30,
         "scenic_score": 4.8
@@ -92,7 +92,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 14.5186,
         "lon": 74.3188,
         "description": "Naturally shaped Om coastline with gentle waves, rock overhangs, and peaceful ocean vistas.",
-        "icon": "🏖️",
+        "icon": "nature",
         "budget": "Budget-friendly",
         "detour_min": 35,
         "scenic_score": 4.7
@@ -103,7 +103,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 13.1623,
         "lon": 75.8601,
         "description": "Architectural masterpiece of 12th-century Hoysala soapstone carving and UNESCO World Heritage sanctuary.",
-        "icon": "🏛️",
+        "icon": "culture",
         "budget": "Budget-friendly",
         "detour_min": 25,
         "scenic_score": 4.9
@@ -114,7 +114,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 13.3912,
         "lon": 75.7214,
         "description": "Highest peak in Karnataka offering sweeping grassland slopes, cool mist, and aromatic coffee estates.",
-        "icon": "🌄",
+        "icon": "nature",
         "budget": "Moderate",
         "detour_min": 45,
         "scenic_score": 4.9
@@ -125,7 +125,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 13.2167,
         "lon": 75.9936,
         "description": "Twin temple complex adorned with intricate friezes of celestial dancers and epics carved in chloritic schist.",
-        "icon": "🏛️",
+        "icon": "culture",
         "budget": "Moderate",
         "detour_min": 30,
         "scenic_score": 4.8
@@ -136,7 +136,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.4519,
         "lon": 75.7179,
         "description": "Frothing jungle waterfall roaring between spice and coffee plantations spanned by a scenic hanging bridge.",
-        "icon": "🌿",
+        "icon": "nature",
         "budget": "Moderate",
         "detour_min": 35,
         "scenic_score": 4.8
@@ -149,7 +149,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.7231,
         "lon": 77.2917,
         "description": "Famed granite sanctuary hill with dramatic cliff views, famous from the classic film Sholay.",
-        "icon": "🌄",
+        "icon": "nature",
         "budget": "Budget-friendly",
         "detour_min": 25,
         "scenic_score": 4.8
@@ -160,7 +160,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.6510,
         "lon": 77.2144,
         "description": "Vibrant open-air folk culture museum depicting traditional rural arts, crafts, and architecture.",
-        "icon": "🏛️",
+        "icon": "culture",
         "budget": "Moderate",
         "detour_min": 35,
         "scenic_score": 4.6
@@ -171,7 +171,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.4243,
         "lon": 76.6853,
         "description": "Peaceful riverine islets on the Kaveri river teeming with exotic migratory birds & boating.",
-        "icon": "🌿",
+        "icon": "nature",
         "budget": "Moderate",
         "detour_min": 30,
         "scenic_score": 4.9
@@ -182,7 +182,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.6517,
         "lon": 77.2089,
         "description": "Renowned heritage craft workshops where artisans handcraft lacquerware and colorful toys.",
-        "icon": "🎨",
+        "icon": "culture",
         "budget": "Budget-friendly",
         "detour_min": 20,
         "scenic_score": 4.4
@@ -193,7 +193,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.6521,
         "lon": 77.2152,
         "description": "Authentic Karnataka rural cuisine served on banana leaves with freshly churned butter & rotis.",
-        "icon": "🍲",
+        "icon": "food",
         "budget": "Budget-friendly",
         "detour_min": 25,
         "scenic_score": 4.7
@@ -204,7 +204,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 12.4485,
         "lon": 76.5385,
         "description": "Magnificent Hoysala-style submerged stone temple resurrected peacefully along backwaters.",
-        "icon": "🛕",
+        "icon": "worship",
         "budget": "Budget-friendly",
         "detour_min": 35,
         "scenic_score": 4.8
@@ -217,7 +217,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 18.7297,
         "lon": 73.3644,
         "description": "Soaring cliff-edge viewpoint with panoramic mist-covered waterfalls and green valley vistas.",
-        "icon": "🌄",
+        "icon": "nature",
         "budget": "Budget-friendly",
         "detour_min": 30,
         "scenic_score": 4.8
@@ -228,7 +228,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 18.7836,
         "lon": 73.4706,
         "description": "Monumental 2nd-century BCE rock-cut Buddhist chaitya with vaulted wooden ribs and ornate pillars.",
-        "icon": "🏛️",
+        "icon": "culture",
         "budget": "Moderate",
         "detour_min": 45,
         "scenic_score": 4.7
@@ -241,7 +241,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 27.0945,
         "lon": 77.6679,
         "description": "Sprawling UNESCO Mughal citadel city showcasing imperial courtyards and intricate carving.",
-        "icon": "🏛️",
+        "icon": "culture",
         "budget": "Moderate",
         "detour_min": 50,
         "scenic_score": 4.9
@@ -252,7 +252,7 @@ CURATED_SCENIC_SPOTS = [
         "lat": 27.1584,
         "lon": 77.5228,
         "description": "Pristine wetland haven host to thousands of wintering waterfowl and scenic cycling paths.",
-        "icon": "🌿",
+        "icon": "nature",
         "budget": "Moderate",
         "detour_min": 45,
         "scenic_score": 4.8
@@ -260,12 +260,12 @@ CURATED_SCENIC_SPOTS = [
 ]
 
 CATEGORY_ICONS = {
-    "Nature": "🌿",
-    "Food": "🍲",
-    "Adventure": "🧭",
-    "Culture": "🏛️",
-    "Places of worship": "🛕",
-    "Attraction": "✨"
+    "Nature": "nature",
+    "Food": "food",
+    "Adventure": "adventure",
+    "Culture": "culture",
+    "Places of worship": "worship",
+    "Attraction": "attraction"
 }
 
 def point_line_distance(p: Tuple[float, float], a: Tuple[float, float], b: Tuple[float, float]) -> Tuple[float, float]:
@@ -300,32 +300,44 @@ _OVERPASS_CACHE: Dict[str, List[Dict[str, Any]]] = {}
 
 async def fetch_overpass_places(
     min_lat: float, min_lon: float, max_lat: float, max_lon: float,
-    interest: str
+    interest: Union[List[str], str]
 ) -> List[Dict[str, Any]]:
     """
     Fetches real places from Overpass API along bounding box corridor.
     Includes caching and 429 rate-limit avoidance with graceful fallback.
     """
-    cache_key = f"{round(min_lat, 2)}_{round(min_lon, 2)}_{round(max_lat, 2)}_{round(max_lon, 2)}_{interest}"
+    if isinstance(interest, list):
+        interests = [str(i).strip() for i in interest if str(i).strip()]
+    elif isinstance(interest, str):
+        interests = [i.strip() for i in interest.split(",") if i.strip()]
+    else:
+        interests = ["Nature"]
+    if not interests:
+        interests = ["Nature"]
+
+    norm_key = "_".join(sorted(interests))
+    cache_key = f"{round(min_lat, 2)}_{round(min_lon, 2)}_{round(max_lat, 2)}_{round(max_lon, 2)}_{norm_key}"
     if cache_key in _OVERPASS_CACHE:
         return _OVERPASS_CACHE[cache_key]
 
-    category_query = ""
-    if interest == "Places of worship":
-        category_query = f'node["amenity"="place_of_worship"]({min_lat},{min_lon},{max_lat},{max_lon});'
-    elif interest == "Food":
-        category_query = f'node["amenity"="restaurant"]({min_lat},{min_lon},{max_lat},{max_lon});'
-    elif interest == "Culture":
-        category_query = f'node["tourism"="museum"]({min_lat},{min_lon},{max_lat},{max_lon});node["historic"]({min_lat},{min_lon},{max_lat},{max_lon});'
-    elif interest == "Adventure":
-        category_query = f'node["sport"]({min_lat},{min_lon},{max_lat},{max_lon});node["leisure"="nature_reserve"]({min_lat},{min_lon},{max_lat},{max_lon});'
-    else:  # Nature / default
-        category_query = f'node["leisure"="park"]({min_lat},{min_lon},{max_lat},{max_lon});node["natural"="waterfall"]({min_lat},{min_lon},{max_lat},{max_lon});node["tourism"="viewpoint"]({min_lat},{min_lon},{max_lat},{max_lon});'
+    category_queries = []
+    for item in interests:
+        if item == "Places of worship":
+            category_queries.append(f'node["amenity"="place_of_worship"]({min_lat},{min_lon},{max_lat},{max_lon});')
+        elif item == "Food":
+            category_queries.append(f'node["amenity"="restaurant"]({min_lat},{min_lon},{max_lat},{max_lon});')
+        elif item == "Culture":
+            category_queries.append(f'node["tourism"="museum"]({min_lat},{min_lon},{max_lat},{max_lon});node["historic"]({min_lat},{min_lon},{max_lat},{max_lon});')
+        elif item == "Adventure":
+            category_queries.append(f'node["sport"]({min_lat},{min_lon},{max_lat},{max_lon});node["leisure"="nature_reserve"]({min_lat},{min_lon},{max_lat},{max_lon});')
+        else:  # Nature / default
+            category_queries.append(f'node["leisure"="park"]({min_lat},{min_lon},{max_lat},{max_lon});node["natural"="waterfall"]({min_lat},{min_lon},{max_lat},{max_lon});node["tourism"="viewpoint"]({min_lat},{min_lon},{max_lat},{max_lon});')
 
+    combined_query = "\n      ".join(category_queries)
     query = f"""
     [out:json][timeout:8];
     (
-      {category_query}
+      {combined_query}
     );
     out center tags 25;
     """
@@ -350,9 +362,21 @@ async def fetch_overpass_places(
                     if lat is None or lon is None:
                         continue
 
-                    cat = interest
-                    icon = CATEGORY_ICONS.get(interest, "📍")
-                    desc = tags.get("description") or f"Scenic {interest.lower()} stop along your route."
+                    # Determine best category match from tags
+                    cat = interests[0]
+                    if tags.get("amenity") == "place_of_worship":
+                        cat = "Places of worship"
+                    elif tags.get("amenity") == "restaurant":
+                        cat = "Food"
+                    elif tags.get("tourism") == "museum" or tags.get("historic"):
+                        cat = "Culture"
+                    elif tags.get("sport") or tags.get("leisure") == "nature_reserve":
+                        cat = "Adventure"
+                    elif tags.get("tourism") == "viewpoint" or tags.get("natural") == "waterfall" or tags.get("leisure") == "park":
+                        cat = "Nature"
+
+                    icon = CATEGORY_ICONS.get(cat, "pin")
+                    desc = tags.get("description") or f"Scenic {cat.lower()} stop along your route."
 
                     places.append({
                         "id": f"osm-{el.get('type')}-{el.get('id')}",
@@ -427,7 +451,7 @@ def score_and_filter_spots(
 async def find_scenic_stops_along_route(
     start_coord: Tuple[float, float], # (lon, lat)
     dest_coord: Tuple[float, float],  # (lon, lat)
-    interest: str = "Nature",
+    interest: Union[List[str], str] = "Nature",
     budget: str = "Moderate",
     duration: str = "3 hours",
     max_stops: int = 3
@@ -436,6 +460,18 @@ async def find_scenic_stops_along_route(
     Discovers, scores, filters, and orders scenic stops along the journey corridor.
     Guaranteed to return high-value scenic stops for any route worldwide.
     """
+    if isinstance(interest, list):
+        interest_list = [str(i).strip() for i in interest if str(i).strip()]
+    elif isinstance(interest, str):
+        interest_list = [i.strip() for i in interest.split(",") if i.strip()]
+    else:
+        interest_list = ["Nature"]
+    if not interest_list:
+        interest_list = ["Nature"]
+
+    interest_set = set(interest_list)
+    primary_interest = interest_list[0] if interest_list else "Nature"
+
     start_lon, start_lat = start_coord
     dest_lon, dest_lat = dest_coord
     total_trip_dist = haversine_distance(start_coord, dest_coord)
@@ -452,20 +488,28 @@ async def find_scenic_stops_along_route(
     min_lon = min(start_lon, dest_lon) - pad_lon
     max_lon = max(start_lon, dest_lon) + pad_lon
 
-    # Step 1: Collect candidates from curated catalog
+    # Step 1: Collect candidates from curated catalog, preferring user interests
     candidates: List[Dict[str, Any]] = []
+    other_candidates: List[Dict[str, Any]] = []
     for spot in CURATED_SCENIC_SPOTS:
         slat = spot["lat"]
         slon = spot["lon"]
         if min_lat <= slat <= max_lat and min_lon <= slon <= max_lon:
-            candidates.append(dict(spot))
+            if spot.get("category") in interest_set:
+                candidates.append(dict(spot))
+            else:
+                other_candidates.append(dict(spot))
+
+    # If no exact category matches, fall back to other corridor spots
+    if not candidates:
+        candidates = other_candidates
 
     # Evaluate curated candidates against actual line corridor
     valid_scored = score_and_filter_spots(candidates, start_coord, dest_coord, max_detour_km)
 
     # Step 2: If we don't have enough valid corridor stops yet, query Overpass
     if len(valid_scored) < max_stops:
-        osm_places = await fetch_overpass_places(min_lat, min_lon, max_lat, max_lon, interest)
+        osm_places = await fetch_overpass_places(min_lat, min_lon, max_lat, max_lon, interest_list)
         if osm_places:
             more_scored = score_and_filter_spots(osm_places, start_coord, dest_coord, max_detour_km)
             valid_scored.extend(more_scored)
@@ -496,16 +540,16 @@ async def find_scenic_stops_along_route(
                 "Adventure": ["River Gorge Lookout & Trailhead", "Monolith Climbing Trail", "Outdoor Expedition Camp"],
                 "Places of worship": ["Historic Hilltop Stone Sanctuary", "Riverside Temple Shrine", "Sacred Grove Heritage Spot"]
             }
-            title = title_options.get(interest, title_options["Nature"])[idx % len(title_options.get(interest, title_options["Nature"]))]
+            title = title_options.get(primary_interest, title_options["Nature"])[idx % len(title_options.get(primary_interest, title_options["Nature"]))]
 
             valid_scored.append({
                 "id": f"syn-{idx}-{int(stop_lat*100)}",
                 "name": title,
-                "category": interest,
+                "category": primary_interest,
                 "lat": round(stop_lat, 4),
                 "lon": round(stop_lon, 4),
-                "description": f"Captivating {interest.lower()} stop nestled along the journey corridor offering refreshing views and cultural charm.",
-                "icon": CATEGORY_ICONS.get(interest, "✨"),
+                "description": f"Captivating {primary_interest.lower()} stop nestled along the journey corridor offering refreshing views and cultural charm.",
+                "icon": CATEGORY_ICONS.get(primary_interest, "pin"),
                 "budget": budget,
                 "detour_min": 20 + idx * 10,
                 "scenic_score": 4.8,

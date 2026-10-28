@@ -56,12 +56,12 @@ export default function RouteMap({
       directLatLngs.forEach((pt) => bounds.extend(pt));
     }
 
-    // 2. Draw Scenic Route (Emerald solid vibrant line)
+    // 2. Draw Scenic Route (Muted rose solid line)
     if (scenicRoute && scenicRoute.geometry && scenicRoute.geometry.length > 0) {
       const scenicLatLngs = scenicRoute.geometry.map(([lon, lat]) => [lat, lon]);
       const scenicPoly = window.L.polyline(scenicLatLngs, {
-        color: "#059669",
-        weight: 5.5,
+        color: "#BA6E65",
+        weight: 5,
         opacity: 0.95,
       });
       scenicPoly.bindTooltip(
@@ -87,12 +87,12 @@ export default function RouteMap({
     if (startLocation && startLocation.lat && startLocation.lon) {
       const startLatLng = [startLocation.lat, startLocation.lon];
       const startIcon = createMarkerIcon(
-        `<div style="background:#10b981; color:white; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.3); border:2px solid white; font-size:16px;">🚀</div>`
+        `<div style="background:#1E293B; color:#FAF8F5; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.25); border:2px solid #BA6E65; font-size:13px; font-weight:700;">A</div>`
       );
       const startMarker = window.L.marker(startLatLng, { icon: startIcon });
       startMarker.bindPopup(`
         <div style="font-family:inherit; min-width:180px;">
-          <span style="font-size:11px; font-weight:bold; color:#059669; text-transform:uppercase;">Origin</span>
+          <span style="font-size:11px; font-weight:bold; color:#1E293B; text-transform:uppercase;">Origin</span>
           <h4 style="margin:4px 0 2px; font-size:15px;">${startLocation.name || "Starting Point"}</h4>
           <p style="margin:0; font-size:12px; color:#64748b;">${startLocation.display_name || ""}</p>
         </div>
@@ -105,12 +105,12 @@ export default function RouteMap({
     if (destination && destination.lat && destination.lon) {
       const destLatLng = [destination.lat, destination.lon];
       const destIcon = createMarkerIcon(
-        `<div style="background:#ef4444; color:white; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.3); border:2px solid white; font-size:16px;">🏁</div>`
+        `<div style="background:#A85850; color:#FAF8F5; width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.25); border:2px solid #FAF8F5; font-size:13px; font-weight:700;">B</div>`
       );
       const destMarker = window.L.marker(destLatLng, { icon: destIcon });
       destMarker.bindPopup(`
         <div style="font-family:inherit; min-width:180px;">
-          <span style="font-size:11px; font-weight:bold; color:#ef4444; text-transform:uppercase;">Destination</span>
+          <span style="font-size:11px; font-weight:bold; color:#A85850; text-transform:uppercase;">Destination</span>
           <h4 style="margin:4px 0 2px; font-size:15px;">${destination.name || "Destination"}</h4>
           <p style="margin:0; font-size:12px; color:#64748b;">${destination.display_name || ""}</p>
         </div>
@@ -126,8 +126,8 @@ export default function RouteMap({
       const isIncluded = stop.is_included !== false;
 
       const stopIcon = createMarkerIcon(
-        `<div style="background:${isIncluded ? "#f59e0b" : "#94a3b8"}; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.3); border:2px solid white; font-size:15px;">
-          ${stop.icon || "📍"}
+        `<div style="background:${isIncluded ? "#BA6E65" : "#64748b"}; color:white; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:0 3px 8px rgba(0,0,0,0.25); border:2px solid white; font-size:12px; font-weight:700;">
+          ${index + 1}
         </div>`
       );
 
@@ -137,18 +137,18 @@ export default function RouteMap({
       popupContent.style.minWidth = "210px";
       popupContent.innerHTML = `
         <div style="font-family:inherit;">
-          <span style="font-size:11px; font-weight:bold; color:#d97706; text-transform:uppercase;">
+          <span style="font-size:11px; font-weight:bold; color:#BA6E65; text-transform:uppercase;">
             Stop #${index + 1} · ${stop.category}
           </span>
           <h4 style="margin:4px 0 3px; font-size:15px; color:#1e293b;">${stop.name}</h4>
           <p style="margin:0 0 8px; font-size:12px; color:#475569; line-height:1.4;">${stop.description}</p>
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:#64748b; margin-bottom:8px;">
-            <span>⏱️ +${stop.detour_min} min detour</span>
-            <span>⭐ ${stop.scenic_score || 4.5}</span>
+            <span>+${stop.detour_min} min detour</span>
+            <span>Rating: ${stop.scenic_score || 4.5}</span>
           </div>
           <button id="toggle-stop-btn-${stop.id}" style="width:100%; padding:6px 10px; border-radius:6px; border:none; cursor:pointer; font-weight:bold; font-size:12px; background:${
-        isIncluded ? "#fee2e2" : "#d1fae5"
-      }; color:${isIncluded ? "#991b1b" : "#065f46"};">
+        isIncluded ? "#F8ECE9" : "#1E293B"
+      }; color:${isIncluded ? "#94443C" : "#FAF8F5"};">
             ${isIncluded ? "Remove from Route" : "Add to Scenic Route"}
           </button>
         </div>
@@ -189,7 +189,7 @@ export default function RouteMap({
           <span>Direct Route (Fastest)</span>
         </div>
         <div className="legend-item">
-          <span className="legend-icon">📍</span>
+          <span className="legend-icon" style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', background: '#BA6E65' }}></span>
           <span>Scenic Corridor Stops</span>
         </div>
       </div>

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { ArrowUpDownIcon } from './components/Icons';
 
 export default function RouteSearchOverlay({
   mapboxToken,
@@ -272,7 +273,7 @@ export default function RouteSearchOverlay({
                   }}
                   aria-label="Clear start location"
                 >
-                  ✕
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               )}
               <button
@@ -298,7 +299,9 @@ export default function RouteSearchOverlay({
                     className="roamify-suggestion-item"
                     onClick={() => handleSelectSuggestion(item, 'start')}
                   >
-                    <span className="roamify-sugg-icon">📍</span>
+                    <span className="roamify-sugg-icon">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    </span>
                     <span className="roamify-sugg-text">{item.place_name}</span>
                   </button>
                 ))}
@@ -331,7 +334,7 @@ export default function RouteSearchOverlay({
                   }}
                   aria-label="Clear destination"
                 >
-                  ✕
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
               )}
             </div>
@@ -345,7 +348,9 @@ export default function RouteSearchOverlay({
                     className="roamify-suggestion-item"
                     onClick={() => handleSelectSuggestion(item, 'dest')}
                   >
-                    <span className="roamify-sugg-icon">🏁</span>
+                    <span className="roamify-sugg-icon">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                    </span>
                     <span className="roamify-sugg-text">{item.place_name}</span>
                   </button>
                 ))}
@@ -362,7 +367,7 @@ export default function RouteSearchOverlay({
           onClick={handleSwap}
           aria-label="Swap locations"
         >
-          ⇅
+          <ArrowUpDownIcon size={14} />
         </button>
       </div>
 
@@ -396,7 +401,9 @@ export default function RouteSearchOverlay({
       {/* Error message banner */}
       {errorMessage && (
         <div className="roamify-error-banner" role="alert">
-          <span className="roamify-error-icon">⚠️</span>
+          <span className="roamify-error-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </span>
           <span className="roamify-error-text">{errorMessage}</span>
           <button
             type="button"
@@ -404,7 +411,7 @@ export default function RouteSearchOverlay({
             onClick={() => setErrorMessage('')}
             aria-label="Dismiss error"
           >
-            ✕
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
       )}

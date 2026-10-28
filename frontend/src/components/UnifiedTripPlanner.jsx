@@ -1,4 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  MapPinIcon,
+  CrosshairIcon,
+  ArrowUpDownIcon,
+  ClockIcon,
+  CoinsIcon,
+  CarIcon,
+  BikeIcon,
+  FootprintsIcon,
+  CompassIcon,
+  TreePineIcon,
+  UtensilsIcon,
+  LandmarkIcon,
+  MountainIcon,
+  ChurchIcon,
+  RouteIcon,
+} from "./Icons";
+
+const AVAILABLE_INTERESTS = [
+  { id: "Nature", label: "Nature & Vistas", icon: TreePineIcon },
+  { id: "Food", label: "Culinary & Flavors", icon: UtensilsIcon },
+  { id: "Culture", label: "Heritage & Lore", icon: LandmarkIcon },
+  { id: "Adventure", label: "Outdoors & Thrills", icon: MountainIcon },
+  { id: "Places of worship", label: "Sacred & Sanctuaries", icon: ChurchIcon },
+];
 
 export default function UnifiedTripPlanner({
   startLocation,
@@ -9,6 +34,8 @@ export default function UnifiedTripPlanner({
   setBudget,
   interest,
   setInterest,
+  interests,
+  setInterests,
   duration,
   setDuration,
   profile,
@@ -23,6 +50,13 @@ export default function UnifiedTripPlanner({
   const [startSuggestions, setStartSuggestions] = useState([]);
   const [destSuggestions, setDestSuggestions] = useState([]);
   const [activeDropdown, setActiveDropdown] = useState(null); // 'start' | 'dest' | null
+
+  // Ensure active interests array is safely resolved
+  const activeInterests = Array.isArray(interests)
+    ? interests
+    : typeof interest === "string" && interest.length > 0
+    ? interest.split(",").map((s) => s.trim()).filter(Boolean)
+    : ["Nature"];
 
   const containerRef = useRef(null);
   const debounceTimerRef = useRef(null);
@@ -103,7 +137,6 @@ export default function UnifiedTripPlanner({
   const handleUseCurrentLocation = async () => {
     if (userLocation && userLocation.length === 2) {
       const [lng, lat] = userLocation;
-      // Reverse geocode to get a human-readable city/area name if token is available
       if (mapboxToken) {
         try {
           const endpoint = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}&limit=1`;
@@ -117,7 +150,7 @@ export default function UnifiedTripPlanner({
             }
           }
         } catch {
-          // Fallback to coordinates string
+          // Fallback to coordinates
         }
       }
       setStartLocation(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
@@ -131,12 +164,47 @@ export default function UnifiedTripPlanner({
     setDestination(temp);
   };
 
+  // Toggle multi-interest selection
+  const handleToggleInterest = (interestId) => {
+    let next;
+    if (activeInterests.includes(interestId)) {
+      if (activeInterests.length === 1) {
+        // Prevent leaving zero interests selected
+        return;
+      }
+      next = activeInterests.filter((id) => id !== interestId);
+    } else {
+      next = [...activeInterests, interestId];
+    }
+
+    if (setInterests) {
+      setInterests(next);
+    }
+    if (setInterest) {
+      setInterest(next.join(", "));
+    }
+  };
+
   return (
     <div className="unified-planner-card" ref={containerRef}>
+      {/* Card Header & Brand Mark */}
+      <div className="planner-card-header">
+        <div className="planner-header-lead">
+          <div className="planner-badge">
+            <CompassIcon size={13} className="planner-badge-icon" />
+            <span>SCENIC ROUTE ATELIER</span>
+          </div>
+          <h2 className="planner-title">Curate Your Journey</h2>
+          <p className="planner-desc">
+            Define your journey corridor, travel tempo, and personal passions. Roamify orchestrates high-value scenic detours that respect your arrival time.
+          </p>
+        </div>
+      </div>
+
       {/* Preset Trails Carousel / Quick Chips */}
       {presets.length > 0 && (
         <div className="planner-presets-row">
-          <span className="presets-badge">Popular Trails</span>
+          <span className="presets-badge">Curated Trails</span>
           <div className="preset-scroll-container">
             {presets.map((preset) => (
               <button
@@ -146,7 +214,8 @@ export default function UnifiedTripPlanner({
                 onClick={() => onSelectPreset(preset)}
                 title={preset.description}
               >
-                {preset.title}
+                <RouteIcon size={13} className="preset-chip-icon" />
+                <span>{preset.title}</span>
               </button>
             ))}
           </div>
@@ -155,10 +224,13 @@ export default function UnifiedTripPlanner({
 
       {/* Main Form */}
       <form onSubmit={onSubmit} className="unified-planner-form">
+        {/* Origin / Destination Search Row */}
         <div className="search-inputs-wrap">
           {/* Origin Input */}
           <div className="search-input-field">
-            <span className="search-input-icon icon-origin" aria-hidden="true">A</span>
+            <span className="search-input-icon icon-origin" aria-hidden="true">
+              A
+            </span>
             <input
               type="text"
               className="planner-text-input"
@@ -167,7 +239,7 @@ export default function UnifiedTripPlanner({
               onFocus={() => {
                 if (startSuggestions.length > 0) setActiveDropdown("start");
               }}
-              placeholder="Starting point or city..."
+              placeholder="Departure city, landmark or address..."
               required
               aria-label="Starting location"
             />
@@ -176,13 +248,10 @@ export default function UnifiedTripPlanner({
                 type="button"
                 className="btn-my-location"
                 onClick={handleUseCurrentLocation}
-                title="Use current GPS location as starting point"
+                title="Use current GPS location"
                 aria-label="Use current GPS location"
               >
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M12 2v3m0 14v3M2 12h3m14 0h3" />
-                </svg>
+                <CrosshairIcon size={15} />
               </button>
             )}
 
@@ -197,7 +266,7 @@ export default function UnifiedTripPlanner({
                     role="option"
                     aria-selected="false"
                   >
-                    <span className="suggestion-icon">📍</span>
+                    <MapPinIcon size={14} className="suggestion-icon" />
                     <span className="suggestion-text">{item.place_name}</span>
                   </li>
                 ))}
@@ -210,17 +279,17 @@ export default function UnifiedTripPlanner({
             type="button"
             className="btn-swap-endpoints"
             onClick={handleSwap}
-            title="Swap start and destination"
+            title="Swap departure and destination"
             aria-label="Swap starting point and destination"
           >
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <ArrowUpDownIcon size={16} />
           </button>
 
           {/* Destination Input */}
           <div className="search-input-field">
-            <span className="search-input-icon icon-dest" aria-hidden="true">B</span>
+            <span className="search-input-icon icon-dest" aria-hidden="true">
+              B
+            </span>
             <input
               type="text"
               className="planner-text-input"
@@ -245,7 +314,7 @@ export default function UnifiedTripPlanner({
                     role="option"
                     aria-selected="false"
                   >
-                    <span className="suggestion-icon">📍</span>
+                    <MapPinIcon size={14} className="suggestion-icon" />
                     <span className="suggestion-text">{item.place_name}</span>
                   </li>
                 ))}
@@ -254,26 +323,45 @@ export default function UnifiedTripPlanner({
           </div>
         </div>
 
-        {/* Travel Preferences Bar */}
-        <div className="preferences-bar">
-          <div className="pref-selector">
-            <label htmlFor="pref-interest">Interest</label>
-            <select
-              id="pref-interest"
-              value={interest}
-              onChange={(e) => setInterest(e.target.value)}
-              className="pref-select"
-            >
-              <option value="Nature">Nature &amp; Panoramas</option>
-              <option value="Food">Local Food &amp; Culinary</option>
-              <option value="Culture">Heritage &amp; Culture</option>
-              <option value="Adventure">Adventure &amp; Outdoors</option>
-              <option value="Places of worship">Places of Worship</option>
-            </select>
+        {/* Multi-Select Interests Selector */}
+        <div className="interests-selector-section">
+          <div className="interests-header-row">
+            <label className="section-mini-label">
+              <span>EXPLORATION INTERESTS</span>
+              <span className="selection-count-pill">
+                {activeInterests.length} selected
+              </span>
+            </label>
+            <span className="interests-hint">Select one or multiple categories to blend into your route</span>
           </div>
 
+          <div className="interests-chip-grid" role="group" aria-label="Exploration interests">
+            {AVAILABLE_INTERESTS.map(({ id, label, icon: IconComponent }) => {
+              const isSelected = activeInterests.includes(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  className={`interest-toggle-chip ${isSelected ? "is-selected" : ""}`}
+                  onClick={() => handleToggleInterest(id)}
+                  aria-pressed={isSelected}
+                  title={`Toggle ${label}`}
+                >
+                  <IconComponent size={16} className="interest-chip-icon" />
+                  <span className="interest-chip-label">{label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Travel Parameters Bar (Detour Time, Budget, Profile, Submit) */}
+        <div className="preferences-bar">
           <div className="pref-selector">
-            <label htmlFor="pref-duration">Detour Time</label>
+            <label htmlFor="pref-duration">
+              <ClockIcon size={13} className="pref-label-icon" />
+              <span>Detour Window</span>
+            </label>
             <select
               id="pref-duration"
               value={duration}
@@ -288,7 +376,10 @@ export default function UnifiedTripPlanner({
           </div>
 
           <div className="pref-selector">
-            <label htmlFor="pref-budget">Budget</label>
+            <label htmlFor="pref-budget">
+              <CoinsIcon size={13} className="pref-label-icon" />
+              <span>Budget Tier</span>
+            </label>
             <select
               id="pref-budget"
               value={budget}
@@ -297,12 +388,21 @@ export default function UnifiedTripPlanner({
             >
               <option value="Budget-friendly">Budget-friendly</option>
               <option value="Moderate">Moderate</option>
-              <option value="Premium">Premium</option>
+              <option value="Premium">Premium Experience</option>
             </select>
           </div>
 
           <div className="pref-selector">
-            <label htmlFor="pref-profile">Travel Mode</label>
+            <label htmlFor="pref-profile">
+              {profile === "driving-car" ? (
+                <CarIcon size={13} className="pref-label-icon" />
+              ) : profile === "cycling-regular" ? (
+                <BikeIcon size={13} className="pref-label-icon" />
+              ) : (
+                <FootprintsIcon size={13} className="pref-label-icon" />
+              )}
+              <span>Travel Mode</span>
+            </label>
             <select
               id="pref-profile"
               value={profile}
@@ -324,10 +424,14 @@ export default function UnifiedTripPlanner({
             >
               {loading ? (
                 <>
-                  <span className="btn-spinner" /> Finding scenic route...
+                  <span className="btn-spinner" />
+                  <span>Computing Scenic Detours...</span>
                 </>
               ) : (
-                "Plan Scenic Route"
+                <>
+                  <RouteIcon size={16} />
+                  <span>Curate Scenic Route</span>
+                </>
               )}
             </button>
           </div>

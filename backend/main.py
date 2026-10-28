@@ -205,11 +205,26 @@ async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(
     # Step 3: Parse max duration and check if the direct route already exceeds it
     max_duration_min = parse_duration_to_minutes(req.duration)
 
+    # Normalize interests (single string, array, or comma-separated)
+    if req.interests and isinstance(req.interests, list):
+        interests_list = [str(i).strip() for i in req.interests if str(i).strip()]
+    elif isinstance(req.interest, list):
+        interests_list = [str(i).strip() for i in req.interest if str(i).strip()]
+    elif isinstance(req.interest, str):
+        interests_list = [i.strip() for i in req.interest.split(",") if i.strip()]
+    else:
+        interests_list = ["Nature"]
+
+    if not interests_list:
+        interests_list = ["Nature"]
+
+    interest_display = ", ".join(interests_list).lower()
+
     # Step 4: Discover scenic places along the route corridor
     stops_raw = await find_scenic_stops_along_route(
         start_coord=start_coord,
         dest_coord=dest_coord,
-        interest=req.interest,
+        interest=interests_list,
         budget=req.budget,
         duration=req.duration,
         max_stops=3
@@ -223,7 +238,7 @@ async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(
             lat=s["lat"],
             lon=s["lon"],
             description=s["description"],
-            icon=s.get("icon", "📍"),
+            icon=s.get("icon", "pin"),
             budget=s.get("budget", req.budget),
             detour_min=s.get("detour_min", 20),
             scenic_score=s.get("scenic_score", 4.5),
@@ -284,14 +299,14 @@ async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(
             dropped = len(stops_raw) - kept
             if dropped > 0:
                 result_message = (
-                    f"Discovered {kept} scenic {req.interest.lower()} "
+                    f"Discovered {kept} scenic {interest_display} "
                     f"stop{'s' if kept != 1 else ''} within your {req.duration} limit. "
                     f"{dropped} additional stop{'s' if dropped != 1 else ''} "
                     f"{'were' if dropped != 1 else 'was'} excluded to stay within the time budget."
                 )
             else:
                 result_message = (
-                    f"Discovered {kept} scenic {req.interest.lower()} "
+                    f"Discovered {kept} scenic {interest_display} "
                     f"stop{'s' if kept != 1 else ''} along your journey corridor."
                 )
         else:
@@ -306,7 +321,7 @@ async def plan_trip(req: TripPlanRequest, x_ors_api_key: Optional[str] = Header(
             )
     else:
         result_message = (
-            f"No scenic {req.interest.lower()} stops found along this corridor. "
+            f"No scenic {interest_display} stops found along this corridor. "
             f"Returning the direct route."
         )
 

@@ -24,7 +24,7 @@ function Waypoints() {
     })
 
     waypoints.forEach((pin, index) => {
-      new mapboxgl.Marker({ color: index === 0 ? '#16a085' : '#5267df' })
+      new mapboxgl.Marker({ color: index === 0 ? '#1E293B' : (index === waypoints.length - 1 ? '#BA6E65' : '#334155') })
         .setLngLat([pin.lng, pin.lat])
         .setPopup(new mapboxgl.Popup({ offset: 25 }).setText(pin.name))
         .addTo(map)

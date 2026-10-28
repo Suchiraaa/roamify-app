@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SettingsIcon, XIcon, ShieldCheckIcon } from "./Icons";
 
 export default function ApiKeyModal({
   isOpen,
@@ -10,6 +11,8 @@ export default function ApiKeyModal({
   const [inputVal, setInputVal] = useState(apiKey || "");
 
   if (!isOpen) return null;
+
+  const backendKeyConfigured = backendStatus?.ors_api_key_configured === true;
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -23,35 +26,67 @@ export default function ApiKeyModal({
   };
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>⚙️ OpenRouteServices Configuration</h3>
-          <button className="modal-close-btn" onClick={onClose}>
-            ✕
+          <div className="modal-title-wrap">
+            <SettingsIcon size={18} className="modal-header-icon" />
+            <h3 id="modal-title">Routing Configuration</h3>
+          </div>
+          <button className="modal-close-btn" onClick={onClose} aria-label="Close configuration modal">
+            <XIcon size={16} />
           </button>
         </div>
 
         <div className="modal-body">
           <div className="status-banner">
-            <span className="status-dot online"></span>
+            <span className={`status-dot ${backendStatus?.status === "online" ? "online" : "offline"}`} />
             <div>
-              <strong>Backend Status: </strong>
-              <span>{backendStatus?.status === "online" ? "Online (FastAPI)" : "Offline (Local mode)"}</span>
-              <p className="status-mode-detail">{backendStatus?.mode || "OpenRouteServices integration ready"}</p>
+              <div className="status-row">
+                <ShieldCheckIcon size={14} className="status-verified-icon" />
+                <strong>Backend Engine: </strong>
+                <span>{backendStatus?.status === "online" ? "Online (FastAPI)" : "Offline (Local mode)"}</span>
+              </div>
+              <p className="status-mode-detail">{backendStatus?.mode || "Routing engine ready"}</p>
             </div>
           </div>
 
+          {backendKeyConfigured && (
+            <div className="status-banner" style={{ borderLeft: "3px solid var(--rose-500, #C4918A)", marginTop: "12px" }}>
+              <div>
+                <div className="status-row">
+                  <ShieldCheckIcon size={14} className="status-verified-icon" />
+                  <strong>ORS API Key: </strong>
+                  <span>Configured on backend</span>
+                </div>
+                <p className="status-mode-detail">
+                  The backend already has an OpenRouteService key configured. You do not need to enter one here unless you want to override it with a custom key.
+                </p>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSave}>
             <label htmlFor="orsApiKey" className="modal-label">
-              OpenRouteService API Key (Optional)
+              {backendKeyConfigured
+                ? "Custom ORS API Key (Override — Optional)"
+                : "OpenRouteService API Key (Optional)"}
             </label>
             <p className="modal-hint">
-              Get a free API key at{" "}
-              <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noreferrer">
-                openrouteservice.org
-              </a>{" "}
-              or leave blank to use the backend's configured key or free fallback routing.
+              {backendKeyConfigured ? (
+                <>
+                  A key is already configured on the backend server. Only enter a custom key here if you want to override it.
+                  The backend will fall back to OSRM routing if no valid key is available.
+                </>
+              ) : (
+                <>
+                  Get a free API key at{" "}
+                  <a href="https://openrouteservice.org/dev/#/signup" target="_blank" rel="noreferrer">
+                    openrouteservice.org
+                  </a>{" "}
+                  or leave blank to use the public OSRM routing fallback.
+                </>
+              )}
             </p>
 
             <input
@@ -59,8 +94,9 @@ export default function ApiKeyModal({
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}
-              placeholder="Paste your ORS API key (e.g. 5b3ce359785a...)"
+              placeholder={backendKeyConfigured ? "Leave blank to use backend key" : "Paste ORS API key (e.g. 5b3ce359785a...)"}
               className="modal-input"
+              autoComplete="off"
             />
 
             <div className="modal-actions">
@@ -73,7 +109,7 @@ export default function ApiKeyModal({
                   Clear Key
                 </button>
               )}
-              <div style={{ marginLeft: "auto", display: "flex", gap: "10px" }}>
+              <div className="modal-action-group">
                 <button
                   type="button"
                   className="btn-secondary"

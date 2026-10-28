@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field
 
 
@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field
 class TripPlanRequest(BaseModel):
     start_location: str = Field(..., description="Starting point or city name")
     destination: str = Field(..., description="Destination point or city name")
-    interest: str = Field(default="Nature", description="Interest: Nature, Food, Adventure, Culture, Places of worship")
+    interest: Union[List[str], str] = Field(default="Nature", description="Interest: Nature, Food, Adventure, Culture, Places of worship")
+    interests: Optional[List[str]] = Field(default=None, description="Optional list of multiple selected interests")
     budget: str = Field(default="Moderate", description="Budget level: Budget-friendly, Moderate, Premium")
     duration: str = Field(default="3 hours", description="Maximum trip duration: 1 hour, 3 hours, Half a day, Full day")
     profile: str = Field(default="driving-car", description="ORS Profile: driving-car, cycling-regular, foot-walking")
@@ -31,7 +32,7 @@ class ScenicStop(BaseModel):
     lat: float
     lon: float
     description: str
-    icon: str = "📍"
+    icon: str = "pin"
     budget: str = "Moderate"
     detour_min: int = 20
     scenic_score: float = 4.5
@@ -154,6 +155,6 @@ class PlaceItem(BaseModel):
     rating_display: str = "Not provided by OpenStreetMap"
     opening_hours: str = "Not reported by provider"
     description: Optional[str] = None
-    icon: str = "📍"
+    icon: str = "pin"
     source: str = "OpenStreetMap"
     verified: bool = True
