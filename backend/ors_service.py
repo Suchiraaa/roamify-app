@@ -1,3 +1,4 @@
+import logging
 import math
 import os
 import re
@@ -7,8 +8,12 @@ from urllib.parse import quote
 import httpx
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
 ORS_BASE_URL = "https://api.openrouteservice.org"
 OSRM_BASE_URL = "https://router.project-osrm.org"
+
+_ROAMIFY_USER_AGENT = "RoamifyTravelPlatform/2.0 (contact: info@roamify.app)"
 
 
 def haversine_distance(coord1: Tuple[float, float], coord2: Tuple[float, float]) -> float:
@@ -110,8 +115,18 @@ class OpenRouteServiceClient:
                                 "lat": float(coords[1]),
                                 "source": "Mapbox Places",
                             }
+                        else:
+                            logger.info("[Mapbox Geocode] No features returned for query '%s'", clean_q)
+                    else:
+                        logger.warning("[Mapbox Geocode] HTTP %d for query '%s'", resp.status_code, clean_q)
+            except httpx.TimeoutException:
+                logger.warning("[Mapbox Geocode] Timeout for query '%s'", clean_q)
+            except httpx.ConnectError as e:
+                logger.warning("[Mapbox Geocode] Connection error for query '%s': %s", clean_q, type(e).__name__)
             except Exception as e:
-                print(f"[Mapbox Geocode Notice]: {e}")
+                logger.warning("[Mapbox Geocode] Error for query '%s': %s", clean_q, type(e).__name__)
+        else:
+            logger.debug("[Mapbox Geocode] No Mapbox token configured, skipping Tier 2")
 
         # ── Tier 3: OpenRouteService Geocoding ───────────────────────────────
         api_key = self.get_effective_key(custom_key)
@@ -136,20 +151,30 @@ class OpenRouteServiceClient:
                                 "lat": float(coords[1]),
                                 "source": "OpenRouteService",
                             }
+                        else:
+                            logger.info("[ORS Geocode] No features returned for query '%s'", clean_q)
+                    else:
+                        logger.warning("[ORS Geocode] HTTP %d for query '%s'", resp.status_code, clean_q)
+            except httpx.TimeoutException:
+                logger.warning("[ORS Geocode] Timeout for query '%s'", clean_q)
+            except httpx.ConnectError as e:
+                logger.warning("[ORS Geocode] Connection error for query '%s': %s", clean_q, type(e).__name__)
             except Exception as e:
-                print(f"[ORS Geocode Notice]: {e}")
+                logger.warning("[ORS Geocode] Error for query '%s': %s", clean_q, type(e).__name__)
 
         # ── Tier 4: Photon OSM API (Fuzzy, typo-tolerant OpenStreetMap) ─────
         queries_to_try = [clean_q]
         if "," in clean_q:
             queries_to_try.append(clean_q.split(",")[0].strip())
 
+        photon_headers = {"User-Agent": _ROAMIFY_USER_AGENT}
         for q_candidate in queries_to_try:
             try:
                 async with httpx.AsyncClient(timeout=8.0) as client:
                     resp = await client.get(
                         "https://photon.komoot.io/api/",
-                        params={"q": q_candidate, "limit": 1}
+                        params={"q": q_candidate, "limit": 1},
+                        headers=photon_headers,
                     )
                     if resp.status_code == 200:
                         feats = resp.json().get("features", [])
@@ -169,12 +194,20 @@ class OpenRouteServiceClient:
                                 "lat": float(coords[1]),
                                 "source": "Photon OSM",
                             }
+                        else:
+                            logger.info("[Photon Geocode] No features for candidate '%s'", q_candidate)
+                    else:
+                        logger.warning("[Photon Geocode] HTTP %d for candidate '%s'", resp.status_code, q_candidate)
+            except httpx.TimeoutException:
+                logger.warning("[Photon Geocode] Timeout for candidate '%s'", q_candidate)
+            except httpx.ConnectError as e:
+                logger.warning("[Photon Geocode] Connection error for candidate '%s': %s", q_candidate, type(e).__name__)
             except Exception as e:
-                print(f"[Photon Geocode Notice]: {e}")
+                logger.warning("[Photon Geocode] Error for candidate '%s': %s", q_candidate, type(e).__name__)
 
         # ── Tier 5: Nominatim OpenStreetMap (Exhaustive Global Cartography) ──
         headers = {
-            "User-Agent": "RoamifyTravelPlatform/2.0 (contact: info@roamify.app)",
+            "User-Agent": _ROAMIFY_USER_AGENT,
             "Accept-Language": "en"
         }
         for q_candidate in queries_to_try:
@@ -196,8 +229,16 @@ class OpenRouteServiceClient:
                                 "lat": float(item["lat"]),
                                 "source": "Nominatim OSM",
                             }
+                        else:
+                            logger.info("[Nominatim Geocode] No results for candidate '%s'", q_candidate)
+                    else:
+                        logger.warning("[Nominatim Geocode] HTTP %d for candidate '%s'", resp.status_code, q_candidate)
+            except httpx.TimeoutException:
+                logger.warning("[Nominatim Geocode] Timeout for candidate '%s'", q_candidate)
+            except httpx.ConnectError as e:
+                logger.warning("[Nominatim Geocode] Connection error for candidate '%s': %s", q_candidate, type(e).__name__)
             except Exception as e:
-                print(f"[Nominatim Notice on '{q_candidate}']: {e}")
+                logger.warning("[Nominatim Geocode] Error for candidate '%s': %s", q_candidate, type(e).__name__)
 
         raise ValueError(
             f"Could not locate '{clean_q}'. Please check spelling or specify a nearby city or country (e.g., 'Paris, France' or 'Zermatt, Switzerland')."
