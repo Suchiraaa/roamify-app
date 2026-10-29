@@ -1,4 +1,4 @@
-# 🌍 Roamify — Trip Planner & Scenic Routing
+#  Roamify: Trip Planner & Scenic Routing
 
 > Make every mile worth exploring. Intelligent scenic routing and trip planning powered by **React**, **Python FastAPI**, and **OpenRouteServices (ORS)**.
 

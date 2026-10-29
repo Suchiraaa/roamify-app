@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SettingsIcon, XIcon, ShieldCheckIcon } from "./Icons";
+import { SettingsIcon, XIcon, ShieldCheckIcon, SparklesIcon, CloudIcon } from "./Icons";
 
 export default function ApiKeyModal({
   isOpen,
@@ -13,6 +13,8 @@ export default function ApiKeyModal({
   if (!isOpen) return null;
 
   const backendKeyConfigured = backendStatus?.ors_api_key_configured === true;
+  const geminiConfigured = backendStatus?.integrations?.gemini_ai_copilot?.configured === true;
+  const weatherConfigured = backendStatus?.integrations?.weather_service?.configured === true;
 
   const handleSave = (e) => {
     e.preventDefault();
@@ -31,7 +33,7 @@ export default function ApiKeyModal({
         <div className="modal-header">
           <div className="modal-title-wrap">
             <SettingsIcon size={18} className="modal-header-icon" />
-            <h3 id="modal-title">Routing Configuration</h3>
+            <h3 id="modal-title">Engine & Integrations Status</h3>
           </div>
           <button className="modal-close-btn" onClick={onClose} aria-label="Close configuration modal">
             <XIcon size={16} />
@@ -51,6 +53,39 @@ export default function ApiKeyModal({
             </div>
           </div>
 
+          {/* Connected Integrations Grid */}
+          <div className="backend-integrations-list">
+            <div className="backend-integration-item">
+              <div className="integration-item-left">
+                <SparklesIcon size={15} className="integration-icon-gemini" />
+                <div>
+                  <strong>Gemini AI Co-Pilot</strong>
+                  <span className="integration-item-sub">
+                    {backendStatus?.integrations?.gemini_ai_copilot?.provider || "Google Gemini"}
+                  </span>
+                </div>
+              </div>
+              <span className={`integration-badge ${geminiConfigured ? "is-live" : "is-off"}`}>
+                {geminiConfigured ? "✓ Active" : "Key Needed in backend/.env"}
+              </span>
+            </div>
+
+            <div className="backend-integration-item">
+              <div className="integration-item-left">
+                <CloudIcon size={15} className="integration-icon-weather" />
+                <div>
+                  <strong>Weather Observations</strong>
+                  <span className="integration-item-sub">
+                    {backendStatus?.integrations?.weather_service?.provider || "OpenWeatherMap Live API"}
+                  </span>
+                </div>
+              </div>
+              <span className={`integration-badge ${weatherConfigured ? "is-live" : "is-off"}`}>
+                {weatherConfigured ? "✓ Active" : "Key Needed in backend/.env"}
+              </span>
+            </div>
+          </div>
+
           {backendKeyConfigured && (
             <div className="status-banner" style={{ borderLeft: "3px solid var(--rose-500, #C4918A)", marginTop: "12px" }}>
               <div>
@@ -66,7 +101,7 @@ export default function ApiKeyModal({
             </div>
           )}
 
-          <form onSubmit={handleSave}>
+          <form onSubmit={handleSave} style={{ marginTop: "16px" }}>
             <label htmlFor="orsApiKey" className="modal-label">
               {backendKeyConfigured
                 ? "Custom ORS API Key (Override — Optional)"

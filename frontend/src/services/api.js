@@ -1,9 +1,9 @@
 /**
  * Roamify API Client
- * Connects React frontend to FastAPI backend & OpenRouteServices.
+ * Connects React frontend to FastAPI backend, OpenRouteServices, Weather, and Gemini AI.
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://192.168.1.2:8000";
 
 export async function checkBackendHealth(customApiKey = "") {
   try {
@@ -23,6 +23,11 @@ export async function checkBackendHealth(customApiKey = "") {
       service: "FastAPI Backend is not running",
       ors_api_key_configured: false,
       mode: "Client-side fallback mode (start backend with 'python run.py')",
+      integrations: {
+        gemini_ai_copilot: { configured: false, provider: "Google Gemini" },
+        weather_service: { configured: false, provider: "OpenWeatherMap Live API" },
+        places_service: { configured: false, provider: "OpenStreetMap Nominatim" },
+      },
     };
   }
 }
@@ -55,6 +60,24 @@ export async function fetchPresets() {
         duration: "Half a day",
         description: "Traverse lush mist-shrouded ghats, ancient Karla Buddhist rock caves, and Tiger Point viewpoints.",
       },
+      {
+        id: "del-agra",
+        title: "Golden Triangle Heritage Passage",
+        start: "Delhi, India",
+        destination: "Agra, Uttar Pradesh, India",
+        interest: "Culture",
+        duration: "Full day",
+        description: "Explore Mughal architecture, bird sanctuaries, and historic imperial citadels.",
+      },
+      {
+        id: "sfo-bigsur",
+        title: "Pacific Coast Scenic Highway",
+        start: "San Francisco, California, USA",
+        destination: "Big Sur, California, USA",
+        interest: "Nature",
+        duration: "Full day",
+        description: "Iconic coastal cliffs, dramatic ocean viewpoints, and towering redwood forests.",
+      },
     ];
   }
 }
@@ -84,7 +107,7 @@ export async function planTrip(tripParams, customApiKey = "") {
   } catch (error) {
     console.warn("Backend call failed:", error);
     if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("NetworkError") || error.message.includes("Load failed"))) {
-      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Ensure the backend is running with 'python run.py'.`);
+      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Ensure the backend is running with 'python run.py'.`, { cause: error });
     }
     throw error;
   }
@@ -115,8 +138,115 @@ export async function recalculateRoute(recalcParams, customApiKey = "") {
   } catch (error) {
     console.warn("Backend recalculate call failed:", error);
     if (error instanceof TypeError && (error.message.includes("fetch") || error.message.includes("NetworkError") || error.message.includes("Load failed"))) {
-      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Ensure the backend is running with 'python run.py'.`);
+      throw new Error(`Cannot connect to backend server at ${BACKEND_URL}. Ensure the backend is running with 'python run.py'.`, { cause: error });
     }
     throw error;
   }
+}
+
+// ==============================================================================
+// Weather API Services (OpenWeatherMap Live Integration)
+// ==============================================================================
+
+export async function fetchCurrentWeather({ lat, lon, city } = {}) {
+  const params = new URLSearchParams();
+  if (lat !== undefined && lat !== null && lon !== undefined && lon !== null) {
+    params.set("lat", lat);
+    params.set("lon", lon);
+  } else if (city) {
+    params.set("city", city);
+  } else {
+    throw new Error("Coordinates or city name required for weather lookup.");
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/weather/current?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Weather retrieval failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchWeatherForecast({ lat, lon, city } = {}) {
+  const params = new URLSearchParams();
+  if (lat !== undefined && lat !== null && lon !== undefined && lon !== null) {
+    params.set("lat", lat);
+    params.set("lon", lon);
+  } else if (city) {
+    params.set("city", city);
+  } else {
+    throw new Error("Coordinates or city name required for forecast lookup.");
+  }
+
+  const res = await fetch(`${BACKEND_URL}/api/weather/forecast?${params.toString()}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Forecast retrieval failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchRouteWeather(points = []) {
+  if (!points || points.length === 0) return [];
+  const res = await fetch(`${BACKEND_URL}/api/weather/route`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ points }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Route weather lookup failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+// ==============================================================================
+// Gemini AI Co-Pilot Services (Google Gemini Integration)
+// ==============================================================================
+
+export async function fetchGeminiCopilotPlan(tripData) {
+  const res = await fetch(`${BACKEND_URL}/api/copilot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(tripData),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Gemini Co-Pilot failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchGeminiReplan(replanData) {
+  const res = await fetch(`${BACKEND_URL}/api/replan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(replanData),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Gemini Replan failed (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function sendCopilotChatMessage(message, tripContext = null, chatHistory = []) {
+  const res = await fetch(`${BACKEND_URL}/api/copilot/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message,
+      trip_context: tripContext,
+      chat_history: chatHistory,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || `Gemini Chat failed (${res.status})`);
+  }
+  return await res.json();
 }

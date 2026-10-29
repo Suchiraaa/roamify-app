@@ -11,6 +11,8 @@ import ScenicStopsList from "./components/ScenicStopsList";
 import ApiKeyModal from "./components/ApiKeyModal";
 import Speedometer from "./speedometer.jsx";
 import NearbyPlaces from "./NearbyPlaces.jsx";
+import WeatherWidget from "./components/WeatherWidget";
+import GeminiCopilot from "./components/GeminiCopilot";
 
 // Lucide-compatible vector SVG Icons
 import {
@@ -22,9 +24,9 @@ import {
   AlertTriangleIcon,
   XIcon,
   ClockIcon,
-  LandmarkIcon,
   ShieldCheckIcon,
-  GaugeIcon,
+  SparklesIcon,
+  CloudIcon,
 } from "./components/Icons";
 
 // Shared Geolocation Hook
@@ -91,6 +93,10 @@ function App() {
   const [errorMsg, setErrorMsg] = useState("");
   const [tripResult, setTripResult] = useState(null);
   const [showResults, setShowResults] = useState(false);
+
+  // ── Gemini AI Co-Pilot & Weather Telemetry State ─────────────────────────
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [weatherSummary, setWeatherSummary] = useState("");
 
   // ── GeoJSON Route Features for Mapbox ────────────────────────────────────
   const [mapboxRouteGeoJson, setMapboxRouteGeoJson] = useState(null);
@@ -232,6 +238,13 @@ function App() {
 
       setTripResult(mergedResult);
       setShowResults(true);
+
+      // Build basic weather summary string from endpoints if possible
+      setWeatherSummary(
+        `Corridor: ${result.start_location?.name || startLocation} to ${result.destination?.name || destination} with ${
+          result.scenic_stops?.length || 0
+        } scenic stops.`
+      );
 
       // Feed Mapbox with both lines
       if (finalScenicRoute?.geometry?.length > 0) {
@@ -385,6 +398,9 @@ function App() {
     return () => window.removeEventListener("roamify:add-waypoint", onCustomEvent);
   }, [handleAddWaypoint]);
 
+  const geminiConfigured = backendStatus?.integrations?.gemini_ai_copilot?.configured;
+  const weatherConfigured = backendStatus?.integrations?.weather_service?.configured;
+
   return (
     <div className="roamify-app-root" data-theme={theme}>
       {/* ── Top Navigation Bar ─────────────────────────────────────────── */}
@@ -407,12 +423,46 @@ function App() {
             <a href="#primary-map-section" className="nav-anchor">
               Interactive Map
             </a>
+            {showResults && (
+              <>
+                <a href="#corridor-weather-section" className="nav-anchor">
+                  Live Weather
+                </a>
+                <a href="#gemini-copilot-section" className="nav-anchor">
+                  AI Co-Pilot
+                </a>
+              </>
+            )}
             <a href="#editorial-philosophy" className="nav-anchor">
               Philosophy
             </a>
           </nav>
 
           <div className="nav-status-group">
+            {/* Quick Trigger: Gemini AI Co-Pilot */}
+            <button
+              type="button"
+              className={`nav-copilot-quick-btn ${geminiConfigured ? "is-active" : ""}`}
+              onClick={() => setIsCopilotOpen(true)}
+              title="Open Gemini AI Co-Pilot Drawer"
+              aria-label="Open Gemini AI Co-Pilot Drawer"
+            >
+              <SparklesIcon size={14} className="sparkle-nav-icon" />
+              <span>AI Co-Pilot</span>
+            </button>
+
+            {/* Weather status indicator if route calculated */}
+            {showResults && (
+              <a
+                href="#corridor-weather-section"
+                className={`nav-copilot-quick-btn ${weatherConfigured ? "is-active" : ""}`}
+                title="View Corridor Weather Outlook"
+              >
+                <CloudIcon size={14} />
+                <span>Weather</span>
+              </a>
+            )}
+
             {/* Day / Night Theme Toggle */}
             <button
               type="button"
@@ -433,13 +483,13 @@ function App() {
                 backendStatus?.ors_api_key_configured ? "is-configured" : "is-default"
               }`}
               onClick={() => setIsConfigOpen(true)}
-              title="OpenRouteServices Configuration"
+              title="Routing Engine & API Configuration"
             >
               <span className="status-indicator-dot" />
               <span>
                 {backendStatus?.ors_api_key_configured
                   ? "ORS Engine Active"
-                  : "Configure ORS Key"}
+                  : "Engine Config"}
               </span>
             </button>
           </div>
@@ -463,10 +513,10 @@ function App() {
 
             <p className="hero-subtitle">
               Roamify intelligently orchestrates scenic detours, panoramic vistas, heritage landmarks, 
-              and authentic local flavors along your travel corridor, mathematically constrained within your exact time budget.
+              live meteorological forecasts, and Gemini AI road-trip guidance along your travel corridor.
             </p>
 
-            {/* TWO Visually Distinct, Prominent Options */}
+            {/* Actions Row */}
             <div className="hero-actions-row">
               <button
                 type="button"
@@ -497,6 +547,15 @@ function App() {
                 <CompassIcon size={17} className="btn-icon" />
                 <span>Explore Live Map</span>
               </button>
+
+              <button
+                type="button"
+                className="btn-hero-tertiary"
+                onClick={() => setIsCopilotOpen(true)}
+              >
+                <SparklesIcon size={16} className="btn-icon sparkle-hero-icon" />
+                <span>Gemini AI Co-Pilot</span>
+              </button>
             </div>
 
             {/* Feature Telemetry Pillars Strip */}
@@ -516,17 +575,17 @@ function App() {
                 </div>
               </div>
               <div className="hero-pillar-item">
-                <GaugeIcon size={16} className="pillar-icon" />
+                <CloudIcon size={16} className="pillar-icon" />
                 <div>
-                  <strong>Telemetry HUD</strong>
-                  <span>Real-time device speed</span>
+                  <strong>Live Weather</strong>
+                  <span>OpenWeatherMap observations</span>
                 </div>
               </div>
               <div className="hero-pillar-item">
-                <LandmarkIcon size={16} className="pillar-icon" />
+                <SparklesIcon size={16} className="pillar-icon" />
                 <div>
-                  <strong>Verified Places</strong>
-                  <span>OpenStreetMap authenticity</span>
+                  <strong>Gemini AI Co-Pilot</strong>
+                  <span>Candid journey strategies</span>
                 </div>
               </div>
             </div>
@@ -683,6 +742,29 @@ function App() {
               onFocusStop={handleFocusPlace}
               interest={interest}
             />
+
+            {/* ── Feature Integration: Real Weather Corridor Outlook ──────── */}
+            <div id="corridor-weather-section">
+              <WeatherWidget
+                origin={tripResult.start_location}
+                destination={tripResult.destination}
+                scenicStops={tripResult.scenic_stops}
+                customWaypoints={customWaypoints}
+              />
+            </div>
+
+            {/* ── Feature Integration: Gemini AI Co-Pilot Road-Trip Strategy ── */}
+            <div id="gemini-copilot-section">
+              <GeminiCopilot
+                startLocation={tripResult.start_location}
+                destination={tripResult.destination}
+                interests={interests}
+                budget={budget}
+                duration={duration}
+                tripResult={tripResult}
+                weatherSummary={weatherSummary}
+              />
+            </div>
           </section>
         )}
 
@@ -732,14 +814,40 @@ function App() {
               </div>
               <h3 className="philosophy-card-title">Verified Open Source Cartography</h3>
               <p className="philosophy-card-desc">
-                Powered by OpenRouteServices, OpenStreetMap, and Mapbox GL, all coordinates, road segments, and elevation contours are computed from live geospatial data. No fabricated points of interest.
+                Powered by OpenRouteServices, OpenStreetMap, Mapbox GL, OpenWeatherMap, and Google Gemini AI, all telemetry, weather observations, and itinerary strategies are grounded in verified data.
               </p>
             </article>
           </div>
         </section>
       </main>
 
-      {/* ── ORS API Key Settings Modal ─────────────────────────────────── */}
+      {/* ── Floating Gemini AI Co-Pilot Button ─────────────────────────── */}
+      <button
+        type="button"
+        className="floating-copilot-btn"
+        onClick={() => setIsCopilotOpen(true)}
+        title="Open Gemini AI Co-Pilot"
+        aria-label="Open Gemini AI Co-Pilot"
+      >
+        <SparklesIcon size={18} className="floating-sparkle-icon" />
+        <span className="floating-btn-text">AI Co-Pilot</span>
+      </button>
+
+      {/* ── Slide-out Gemini Co-Pilot Drawer Modal ──────────────────────── */}
+      <GeminiCopilot
+        startLocation={tripResult?.start_location || startLocation}
+        destination={tripResult?.destination || destination}
+        interests={interests}
+        budget={budget}
+        duration={duration}
+        tripResult={tripResult}
+        weatherSummary={weatherSummary}
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        isDrawer={true}
+      />
+
+      {/* ── ORS & Backend Engine Settings Modal ─────────────────────────── */}
       <ApiKeyModal
         isOpen={isConfigOpen}
         onClose={() => setIsConfigOpen(false)}
@@ -765,9 +873,11 @@ function App() {
             <div className="footer-tech-stack">
               <span>Map Engine: <strong>Mapbox GL</strong></span>
               <span className="footer-sep">·</span>
-              <span>Routing Engine: <strong>OpenRouteService</strong></span>
+              <span>Routing: <strong>OpenRouteService / OSRM</strong></span>
               <span className="footer-sep">·</span>
-              <span>Cartography: <strong>OpenStreetMap</strong></span>
+              <span>Weather: <strong>OpenWeatherMap</strong></span>
+              <span className="footer-sep">·</span>
+              <span>AI Co-Pilot: <strong>Google Gemini</strong></span>
             </div>
             <p className="footer-copyright">
               Roamify © 2026 · Designed for scenic exploration
