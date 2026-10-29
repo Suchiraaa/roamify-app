@@ -3,7 +3,7 @@
  * Connects React frontend to FastAPI backend, OpenRouteServices, Weather, and Gemini AI.
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "http://192.168.1.2:8000";
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://roamify-app-khwp.onrender.com";
 
 export async function checkBackendHealth(customApiKey = "") {
   try {
