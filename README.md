@@ -37,27 +37,7 @@ Roamify/
 
 ---
 
-## ⚡ How to Run
 
-### Step 1: Start the FastAPI Backend
-Open a terminal in the `backend` folder:
-```bash
-cd c:\Users\Ganesh\Downloads\Roamify\backend
-pip install -r requirements.txt
-python run.py
-```
-> **Backend runs at:** `http://127.0.0.1:8000`
-> **Interactive Swagger Docs:** `http://127.0.0.1:8000/docs`
-
-### Step 2: Start the React Frontend
-Open another terminal in the `frontend` folder:
-```bash
-cd c:\Users\Ganesh\Downloads\Roamify\frontend
-npm run dev
-```
-> **Frontend runs at:** `http://localhost:5173`
-
----
 
 ## 🗺️ How OpenRouteServices (ORS) is Integrated
 
