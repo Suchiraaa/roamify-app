@@ -192,7 +192,7 @@
 }
 
 .roamify-dot-start {
-  background-color: #BA6E65;
+  background-color: #E05A47;
 }
 
 .roamify-dot-line {
@@ -539,7 +539,7 @@
 
 .roamify-control-btn.active {
   background: #283548;
-  border-color: #BA6E65;
+  border-color: #E05A47;
   color: #F8ECE9;
   box-shadow: none;
 }
@@ -583,7 +583,7 @@
 
 .roamify-style-btn.active {
   background: #283548;
-  color: #BA6E65;
+  color: #E05A47;
   font-weight: 600;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   border: 1px solid rgba(197, 160, 89, 0.35);
@@ -699,7 +699,7 @@
 
 .marker-start {
   background: #283548;
-  border-color: #BA6E65 !important;
+  border-color: #E05A47 !important;
 }
 
 .marker-dest {
@@ -708,7 +708,7 @@
 }
 
 .marker-scenic-stop.is-included {
-  background: #BA6E65;
+  background: #E05A47;
   border-color: #283548 !important;
   color: #1E293B !important;
 }
@@ -720,7 +720,7 @@
 
 .marker-custom-waypoint {
   background: #475569;
-  border-color: #BA6E65 !important;
+  border-color: #E05A47 !important;
 }
 
 /* Mapbox Popup Overrides */
@@ -780,7 +780,7 @@
 }
 
 .origin-tag {
-  color: #BA6E65;
+  color: #E05A47;
 }
 
 .dest-tag {
@@ -843,7 +843,7 @@
 .btn-add-stop {
   background: #283548;
   color: #F8ECE9;
-  border: 1px solid #BA6E65;
+  border: 1px solid #E05A47;
 }
 
 .btn-add-stop:hover {
@@ -896,7 +896,7 @@
 }
 
 .scenic-swatch {
-  background: #BA6E65;
+  background: #E05A47;
 }
 
 .direct-swatch {

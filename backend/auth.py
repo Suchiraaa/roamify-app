@@ -161,7 +161,18 @@ def get_current_user(
         )
 
     user_id = payload["sub"]
-    user = db.query(User).filter(User.id == user_id).first()
+    try:
+        user = db.query(User).filter(User.id == user_id).first()
+    except Exception as exc:
+        from database import is_transient_turso_error
+        if is_transient_turso_error(exc):
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            user = db.query(User).filter(User.id == user_id).first()
+        else:
+            raise
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

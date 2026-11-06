@@ -73,7 +73,7 @@ export default function RouteSummary({
               <span className="metric-val">{directRoute.distance_km}</span>
               <span className="metric-unit">km</span>
             </div>
-            <div className="metric-divider" aria-hidden="true">Â·</div>
+            <div className="metric-divider" aria-hidden="true">·</div>
             <div className="metric">
               <span className="metric-val">{formatHoursMins(directRoute.duration_min)}</span>
             </div>
@@ -99,7 +99,7 @@ export default function RouteSummary({
               <span className="metric-val emerald-val">{scenicRoute.distance_km}</span>
               <span className="metric-unit">km</span>
             </div>
-            <div className="metric-divider" aria-hidden="true">Â·</div>
+            <div className="metric-divider" aria-hidden="true">·</div>
             <div className="metric">
               <span className="metric-val emerald-val">{formatHoursMins(scenicRoute.duration_min)}</span>
             </div>

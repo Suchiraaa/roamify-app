@@ -1,12 +1,171 @@
+import logging
 import os
+import sqlite3
+import time
 import urllib.parse
 from pathlib import Path
+from typing import Any, Callable, Optional, Sequence
+
+from dotenv import load_dotenv
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.pool import NullPool, StaticPool
 
-# Default SQLite database path (inside backend directory for local development)
+# Setup logging
+logger = logging.getLogger("roamify.database")
+
+# Ensure environment variables are loaded regardless of import order
 BACKEND_DIR = Path(__file__).resolve().parent
+load_dotenv(BACKEND_DIR / ".env")
+load_dotenv(BACKEND_DIR.parent / ".env")
+load_dotenv()
+
 DEFAULT_DB_FILE = BACKEND_DIR / "roamify.db"
+
+TRANSIENT_ERROR_PATTERNS = (
+    "hrana",
+    "connection closed",
+    "broken pipe",
+    "reset by peer",
+    "http error",
+    "stream closed",
+    "timed out",
+    "timeout",
+    "connection reset",
+    "failed to send",
+    "network error",
+    "connection aborted",
+    "connection refused",
+    "eof",
+)
+
+
+def is_transient_turso_error(exc: BaseException) -> bool:
+    """Detect whether an exception is a transient Turso / Hrana network connection drop."""
+    msg = str(exc).lower()
+    return any(pattern in msg for pattern in TRANSIENT_ERROR_PATTERNS)
+
+
+class ResilientLibsqlCursor:
+    """
+    Wraps a libsql cursor to automatically catch transient network/HTTP connection drops,
+    reconnect the underlying database session, and retry execution seamlessly.
+    """
+
+    def __init__(self, parent_conn: "ResilientLibsqlConnection", raw_cursor: Any):
+        self._parent = parent_conn
+        self._cursor = raw_cursor
+
+    def execute(self, statement: str, parameters: Optional[Sequence[Any]] = None):
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                if parameters is not None:
+                    return self._cursor.execute(statement, parameters)
+                return self._cursor.execute(statement)
+            except Exception as exc:
+                if attempt < max_retries and is_transient_turso_error(exc):
+                    backoff = 0.1 * (2 ** attempt)
+                    logger.warning(
+                        "Transient Turso error on attempt %d: %s. Reconnecting and retrying in %.2fs...",
+                        attempt + 1,
+                        exc,
+                        backoff,
+                    )
+                    time.sleep(backoff)
+                    self._parent.reconnect()
+                    self._cursor = self._parent._raw_conn.cursor()
+                    continue
+
+                if is_transient_turso_error(exc) and not isinstance(exc, sqlite3.Error):
+                    # Raise as standard DBAPI OperationalError so SQLAlchemy's dialect
+                    # recognizes it properly
+                    raise sqlite3.OperationalError(str(exc)) from exc
+                raise
+
+    def executemany(self, statement: str, seq_of_parameters: Sequence[Sequence[Any]]):
+        max_retries = 2
+        for attempt in range(max_retries + 1):
+            try:
+                return self._cursor.executemany(statement, seq_of_parameters)
+            except Exception as exc:
+                if attempt < max_retries and is_transient_turso_error(exc):
+                    backoff = 0.1 * (2 ** attempt)
+                    logger.warning(
+                        "Transient Turso error during executemany on attempt %d: %s. Retrying...",
+                        attempt + 1,
+                        exc,
+                    )
+                    time.sleep(backoff)
+                    self._parent.reconnect()
+                    self._cursor = self._parent._raw_conn.cursor()
+                    continue
+
+                if is_transient_turso_error(exc) and not isinstance(exc, sqlite3.Error):
+                    raise sqlite3.OperationalError(str(exc)) from exc
+                raise
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._cursor, name)
+
+
+class ResilientLibsqlConnection:
+    """
+    Wraps a libsql DBAPI connection to provide automatic reconnection,
+    safe pool disposal, and resilient cursor creation.
+    """
+
+    def __init__(self, connect_fn: Callable[[], Any]):
+        self._connect_fn = connect_fn
+        self._raw_conn = self._init_raw_connection()
+
+    def _init_raw_connection(self) -> Any:
+        conn = self._connect_fn()
+        try:
+            cur = conn.cursor()
+            cur.execute("PRAGMA foreign_keys=ON")
+            cur.close()
+        except Exception:
+            pass
+        return conn
+
+    def reconnect(self) -> None:
+        """Safely close previous socket and re-establish a fresh connection."""
+        try:
+            self._raw_conn.close()
+        except Exception:
+            pass
+        self._raw_conn = self._init_raw_connection()
+
+    def cursor(self) -> ResilientLibsqlCursor:
+        return ResilientLibsqlCursor(self, self._raw_conn.cursor())
+
+    def create_function(self, *args, **kwargs) -> None:
+        """Compatibility no-op for regexp registration."""
+        pass
+
+    def rollback(self) -> None:
+        try:
+            return self._raw_conn.rollback()
+        except Exception as exc:
+            if is_transient_turso_error(exc):
+                logger.debug("Transient error ignored during rollback: %s", exc)
+                return None
+            raise
+
+    def commit(self) -> None:
+        return self._raw_conn.commit()
+
+    def close(self) -> None:
+        try:
+            return self._raw_conn.close()
+        except Exception as exc:
+            if is_transient_turso_error(exc):
+                return None
+            raise
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._raw_conn, name)
 
 
 def parse_database_configuration():
@@ -64,15 +223,48 @@ def build_engine(config=None):
         turso_token = cfg["turso_token"]
 
         def libsql_creator():
-            return libsql.connect(database=turso_url, auth_token=turso_token)
+            return ResilientLibsqlConnection(
+                lambda: libsql.connect(database=turso_url, auth_token=turso_token)
+            )
+
+        # In-memory libSQL test databases need StaticPool; remote Turso needs NullPool
+        # to avoid holding idle HTTP/WebSocket connections that timeout.
+        if turso_url == ":memory:":
+            pool_class = StaticPool
+        else:
+            pool_class = NullPool
 
         engine_instance = create_engine(
             "sqlite://",
             creator=libsql_creator,
-            pool_pre_ping=True,
-            pool_recycle=300,
+            poolclass=pool_class,
             echo=False,
         )
+
+        # Patch dialect disconnection and ping safety
+        engine_instance.dialect.is_disconnect = lambda e, conn, cur: is_transient_turso_error(e)
+
+        def safe_do_ping(dbapi_connection):
+            try:
+                cursor = dbapi_connection.cursor()
+                try:
+                    cursor.execute("SELECT 1")
+                finally:
+                    cursor.close()
+                return True
+            except Exception as err:
+                logger.warning("Turso pool ping check failed: %s; recycling connection.", err)
+                return False
+
+        engine_instance.dialect.do_ping = safe_do_ping
+
+        # Event listener to invalidate connection on transient network failures
+        @event.listens_for(engine_instance, "handle_error")
+        def handle_turso_engine_error(context):
+            orig = context.original_exception
+            if is_transient_turso_error(orig):
+                context.is_disconnect = True
+                context.invalidate_pool_on_disconnect = True
     else:
         db_url = cfg["database_url"]
 
@@ -119,8 +311,17 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        raise
     finally:
-        db.close()
+        try:
+            db.close()
+        except Exception:
+            pass
 
 
 def init_db(target_engine=None):

@@ -673,22 +673,8 @@ function App() {
                   <span>{user.name || user.email.split("@")[0]}</span>
                 </button>
                 {userMenuOpen && (
-                  <div
-                    className="user-nav-dropdown"
-                    style={{
-                      position: "absolute",
-                      right: 0,
-                      top: "calc(100% + 8px)",
-                      width: "200px",
-                      backgroundColor: "var(--card-bg, #ffffff)",
-                      borderRadius: "12px",
-                      boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
-                      border: "1px solid var(--border-color, #e2e8f0)",
-                      zIndex: 100,
-                      padding: "8px 0",
-                    }}
-                  >
-                    <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-color, #e2e8f0)", fontSize: "11px", opacity: 0.7 }} className="truncate">
+                  <div className="user-nav-dropdown">
+                    <div className="user-nav-email truncate">
                       {user.email}
                     </div>
                     <button
@@ -697,7 +683,6 @@ function App() {
                         setUserMenuOpen(false);
                         setSavedPlacesModalOpen(true);
                       }}
-                      style={{ width: "100%", textAlign: "left", padding: "8px 16px", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", cursor: "pointer", color: "inherit" }}
                     >
                       <BookmarkIcon size={13} />
                       <span>Saved Places ({savedPlaces.length})</span>
@@ -708,18 +693,17 @@ function App() {
                         setUserMenuOpen(false);
                         setSavedTripsModalOpen(true);
                       }}
-                      style={{ width: "100%", textAlign: "left", padding: "8px 16px", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", cursor: "pointer", color: "inherit" }}
                     >
                       <RouteIcon size={13} />
                       <span>Saved Trips ({savedTrips.length})</span>
                     </button>
                     <button
                       type="button"
+                      className="user-nav-logout-btn"
                       onClick={() => {
                         setUserMenuOpen(false);
                         logout();
                       }}
-                      style={{ width: "100%", textAlign: "left", padding: "8px 16px", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}
                     >
                       <LogOutIcon size={13} />
                       <span>Sign Out</span>
@@ -774,12 +758,14 @@ function App() {
       {/* ── Main Application Content ───────────────────────────────────── */}
       <main className="app-main-layout">
         {/* ── Hero Section / Travel Editorial Experience ─────────────────── */}
-        <section className="app-hero-banner" aria-label="Roamify Introduction">
+                {/* ── Hero Section / Travel Editorial Experience ─────────────────── */}
+        <section className="app-hero-banner" aria-label="Roamify Travel Atelier">
+          <div className="hero-photography-backdrop" aria-hidden="true" />
           <div className="hero-atmosphere-backdrop" aria-hidden="true" />
           <div className="hero-content-wrap">
             <div className="hero-eyebrow-container">
-              <CompassIcon size={13} className="hero-eyebrow-compass" />
-              <span className="hero-eyebrow">CURATED SCENIC ROUTING · TRAVEL EDITORIAL</span>
+              <CompassIcon size={14} className="hero-eyebrow-compass" />
+              <span className="hero-eyebrow">CURATED SCENIC ROUTING · TRAVEL ATELIER</span>
             </div>
 
             <h1 className="hero-title">
@@ -787,9 +773,18 @@ function App() {
             </h1>
 
             <p className="hero-subtitle">
-              Roamify intelligently orchestrates scenic detours, panoramic vistas, heritage landmarks, 
-              live meteorological forecasts, and Gemini AI road-trip guidance along your travel corridor.
+              Engineered for thoughtful travelers. Roamify orchestrates panoramic detours, heritage vistas,
+              live meteorological forecasts, and Gemini AI road-trip intelligence along your travel corridor.
             </p>
+
+            {/* Curated Editorial Highlights Strip */}
+            <div className="hero-highlights-strip">
+              <span className="highlight-pill">✦ OpenCartography Engine</span>
+              <span className="highlight-dot">·</span>
+              <span className="highlight-pill">✦ Adaptive Elliptical Geometry</span>
+              <span className="highlight-dot">·</span>
+              <span className="highlight-pill">✦ Mathematical Detour Caps</span>
+            </div>
 
             {/* Actions Row */}
             <div className="hero-actions-row">
@@ -806,7 +801,7 @@ function App() {
                 }}
               >
                 <RouteIcon size={17} className="btn-icon" />
-                <span>Plan My Trip</span>
+                <span>Plan Scenic Route</span>
               </button>
 
               <button
@@ -820,7 +815,7 @@ function App() {
                 }}
               >
                 <CompassIcon size={17} className="btn-icon" />
-                <span>Explore Live Map</span>
+                <span>Explore Interactive Map</span>
               </button>
 
               <button
@@ -831,38 +826,6 @@ function App() {
                 <SparklesIcon size={16} className="btn-icon sparkle-hero-icon" />
                 <span>Gemini AI Co-Pilot</span>
               </button>
-            </div>
-
-            {/* Feature Telemetry Pillars Strip */}
-            <div className="hero-pillars-grid">
-              <div className="hero-pillar-item">
-                <ShieldCheckIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Corridor Geometry</strong>
-                  <span>Dynamically scored detours</span>
-                </div>
-              </div>
-              <div className="hero-pillar-item">
-                <ClockIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Strict Time Budget</strong>
-                  <span>Zero arrival overshoots</span>
-                </div>
-              </div>
-              <div className="hero-pillar-item">
-                <CloudIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Live Weather</strong>
-                  <span>OpenWeatherMap observations</span>
-                </div>
-              </div>
-              <div className="hero-pillar-item">
-                <SparklesIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Gemini AI Co-Pilot</strong>
-                  <span>Candid journey strategies</span>
-                </div>
-              </div>
             </div>
           </div>
         </section>
@@ -914,9 +877,15 @@ function App() {
         {/* ── Primary Map Section (Single Mapbox Canvas) ────────────────── */}
         <section id="primary-map-section" className="primary-map-section" aria-label="Interactive Route Map">
           <div className="map-section-header">
-            <div>
-              <span className="section-eyebrow">CARTOGRAPHIC CANVAS</span>
+            <div className="map-title-block">
+              <div className="section-eyebrow-badge">
+                <span className="eyebrow-pulse-dot" />
+                <span className="section-eyebrow">CARTOGRAPHIC CANVAS</span>
+              </div>
               <h2 className="map-section-title">Interactive Corridor Map</h2>
+              <p className="map-section-subtitle">
+                Explore real-time GPS telemetry, panoramic waypoints, and dynamically calculated detours.
+              </p>
             </div>
             <div className="map-section-actions">
               <span className="map-projection-tag">Mapbox GL · WGS84 Projection</span>
@@ -978,18 +947,18 @@ function App() {
           </section>
         )}
 
-        {/* ── Results Section (Route Metrics & Scenic Stops) ────────────── */}
+        {/* ── Results Section (Route Metrics, Scenic Stops, Weather & Co-Pilot) ── */}
         {showResults && tripResult && (
           <section id="route-summary-section" className="results-container">
             <div className="results-header-bar">
-              <div>
+              <div className="results-title-group">
                 <span className="results-eyebrow">CURATED DETOUR ITINERARY</span>
                 <h2 className="results-title">
-                  {tripResult.start_location.name} → {tripResult.destination.name}
+                  {tripResult.start_location.name} <span className="route-arrow-icon">→</span> {tripResult.destination.name}
                 </h2>
               </div>
               <div className="results-meta-pill">
-                <span>{interests.join(" + ")} focus</span>
+                <span className="meta-interest-tag">{interests.join(" + ")} focus</span>
                 <span className="meta-dot">·</span>
                 <span>{budget} budget</span>
                 <span className="meta-dot">·</span>
@@ -997,58 +966,65 @@ function App() {
               </div>
             </div>
 
-            {/* Route Summary Comparison */}
-            <RouteSummary
-              directRoute={tripResult.direct_route}
-              scenicRoute={tripResult.scenic_route}
-              detourAddedKm={tripResult.detour_added_km}
-              detourAddedMin={tripResult.detour_added_min}
-              stopsCount={
-                (tripResult.scenic_stops?.filter((s) => s.is_included !== false).length || 0) +
-                customWaypoints.length
-              }
-              provider={tripResult.provider}
-              startLocation={startLocation}
-              destination={destination}
-              stops={tripResult.scenic_stops}
-              tripParams={{
-                interests,
-                budget,
-                duration,
-                profile,
-                scenic_factor: scenicFactor,
-              }}
-            />
+            {/* Asymmetric Command Workspace Grid */}
+            <div className="results-asymmetric-deck">
+              <div className="results-deck-left">
+                {/* Route Summary Comparison */}
+                <RouteSummary
+                  directRoute={tripResult.direct_route}
+                  scenicRoute={tripResult.scenic_route}
+                  detourAddedKm={tripResult.detour_added_km}
+                  detourAddedMin={tripResult.detour_added_min}
+                  stopsCount={
+                    (tripResult.scenic_stops?.filter((s) => s.is_included !== false).length || 0) +
+                    customWaypoints.length
+                  }
+                  provider={tripResult.provider}
+                  startLocation={startLocation}
+                  destination={destination}
+                  stops={tripResult.scenic_stops}
+                  tripParams={{
+                    interests,
+                    budget,
+                    duration,
+                    profile,
+                    scenic_factor: scenicFactor,
+                  }}
+                />
 
-            {/* Scenic Stops Along The Corridor */}
-            <ScenicStopsList
-              stops={tripResult.scenic_stops}
-              onToggleStop={handleToggleStop}
-              onFocusStop={handleFocusPlace}
-              interest={interest}
-            />
+                {/* Corridor Weather Outlook */}
+                <div id="corridor-weather-section" className="deck-weather-panel">
+                  <WeatherWidget
+                    origin={tripResult.start_location}
+                    destination={tripResult.destination}
+                    scenicStops={tripResult.scenic_stops}
+                    customWaypoints={customWaypoints}
+                  />
+                </div>
+              </div>
 
-            {/* ── Feature Integration: Real Weather Corridor Outlook ──────── */}
-            <div id="corridor-weather-section">
-              <WeatherWidget
-                origin={tripResult.start_location}
-                destination={tripResult.destination}
-                scenicStops={tripResult.scenic_stops}
-                customWaypoints={customWaypoints}
-              />
-            </div>
+              <div className="results-deck-right">
+                {/* Scenic Stops Along The Corridor */}
+                <ScenicStopsList
+                  stops={tripResult.scenic_stops}
+                  onToggleStop={handleToggleStop}
+                  onFocusStop={handleFocusPlace}
+                  interest={interest}
+                />
 
-            {/* ── Feature Integration: Gemini AI Co-Pilot Road-Trip Strategy ── */}
-            <div id="gemini-copilot-section">
-              <GeminiCopilot
-                startLocation={tripResult.start_location}
-                destination={tripResult.destination}
-                interests={interests}
-                budget={budget}
-                duration={duration}
-                tripResult={tripResult}
-                weatherSummary={weatherSummary}
-              />
+                {/* Gemini AI Co-Pilot Road-Trip Strategy */}
+                <div id="gemini-copilot-section" className="deck-copilot-panel">
+                  <GeminiCopilot
+                    startLocation={tripResult.start_location}
+                    destination={tripResult.destination}
+                    interests={interests}
+                    budget={budget}
+                    duration={duration}
+                    tripResult={tripResult}
+                    weatherSummary={weatherSummary}
+                  />
+                </div>
+              </div>
             </div>
           </section>
         )}

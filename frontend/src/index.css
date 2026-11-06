@@ -22,8 +22,8 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  background-color: #FAF8F4;
-  color: #2B2B35;
+  background-color: var(--bg-page, #FAF8F4);
+  color: var(--text-primary, #101E33);
   line-height: 1.55;
   transition: background-color 0.25s ease, color 0.25s ease;
 }
@@ -40,6 +40,6 @@ button, input, select, textarea {
 }
 
 ::selection {
-  background: #1E293B;
-  color: #FAF8F5;
+  background: #E05A47;
+  color: #FFFFFF;
 }

@@ -150,7 +150,7 @@ export default function Map({
           'line-cap': 'round'
         },
         paint: {
-          'line-color': '#BA6E65',
+          'line-color': '#E05A47',
           'line-width': 4.5,
           'line-opacity': 0.95
         }
