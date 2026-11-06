@@ -249,7 +249,7 @@ export default function GeminiCopilot({
         ...prev,
         {
           role: "assistant",
-          text: `⚠️ Co-Pilot error: ${err.message || "Could not reach Gemini service."}`,
+          text: `Co-Pilot error: ${err.message || "Could not reach Gemini service."}`,
           isError: true,
         },
       ]);
@@ -487,7 +487,7 @@ export default function GeminiCopilot({
                 } ${msg.isError ? "is-error" : ""}`}
               >
                 <div className="chat-bubble-avatar">
-                  {msg.role === "user" ? "👤" : "✨"}
+                  {msg.role === "user" ? "ðŸ‘¤" : "âœ¨"}
                 </div>
                 <div className="chat-bubble-content">
                   <SimpleMarkdown content={msg.text} />
@@ -499,7 +499,7 @@ export default function GeminiCopilot({
             ))}
             {chatLoading && (
               <div className="copilot-chat-bubble is-assistant is-typing">
-                <div className="chat-bubble-avatar">✨</div>
+                <div className="chat-bubble-avatar">âœ¨</div>
                 <div className="chat-typing-dots">
                   <span />
                   <span />

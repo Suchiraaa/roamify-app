@@ -76,10 +76,25 @@ def generate_csrf_token() -> str:
     return secrets.token_hex(32)
 
 
+def set_csrf_cookie(response: Response, csrf_token: str):
+    """Attach readable CSRF cookie to response with matching Max-Age and Expires."""
+    max_age_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
+    response.set_cookie(
+        key=CSRF_COOKIE_NAME,
+        value=csrf_token,
+        max_age=max_age_seconds,
+        expires=max_age_seconds,
+        httponly=False,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path="/",
+    )
+
+
 def set_auth_cookies(response: Response, token: str, csrf_token: Optional[str] = None):
     """
     Attach authentication and CSRF cookies to the HTTP response.
-    - Auth cookie: HttpOnly, SameSite=Lax (or config), Secure in production
+    - Auth cookie: HttpOnly, SameSite=Lax (or config), Secure in production, Max-Age + Expires
     - CSRF cookie: Accessible to JavaScript (HttpOnly=False) to allow double-submit validation
     """
     max_age_seconds = ACCESS_TOKEN_EXPIRE_MINUTES * 60
@@ -87,21 +102,14 @@ def set_auth_cookies(response: Response, token: str, csrf_token: Optional[str] =
         key=AUTH_COOKIE_NAME,
         value=token,
         max_age=max_age_seconds,
+        expires=max_age_seconds,
         httponly=True,
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
         path="/",
     )
     if csrf_token:
-        response.set_cookie(
-            key=CSRF_COOKIE_NAME,
-            value=csrf_token,
-            max_age=max_age_seconds,
-            httponly=False,
-            secure=COOKIE_SECURE,
-            samesite=COOKIE_SAMESITE,
-            path="/",
-        )
+        set_csrf_cookie(response, csrf_token)
 
 
 def clear_auth_cookies(response: Response):
@@ -111,12 +119,14 @@ def clear_auth_cookies(response: Response):
         path="/",
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
+        httponly=True,
     )
     response.delete_cookie(
         key=CSRF_COOKIE_NAME,
         path="/",
         secure=COOKIE_SECURE,
         samesite=COOKIE_SAMESITE,
+        httponly=False,
     )
 
 

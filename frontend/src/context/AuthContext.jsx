@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import {
   getCurrentUser,
   loginUser,
@@ -55,14 +55,23 @@ export function AuthProvider({ children }) {
     async function checkSession() {
       try {
         const currentUser = await getCurrentUser();
-        if (mounted && currentUser) {
-          setUser(currentUser);
-          await loadUserData();
+        if (mounted) {
+          if (currentUser) {
+            setUser(currentUser);
+            loadUserData();
+          } else {
+            setUser(null);
+          }
         }
       } catch (err) {
-        console.warn("Session check error:", err);
+        if (mounted) {
+          console.warn("Session check error:", err);
+          setUser(null);
+        }
       } finally {
-        if (mounted) setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     }
     checkSession();
@@ -210,6 +219,7 @@ export function AuthProvider({ children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {

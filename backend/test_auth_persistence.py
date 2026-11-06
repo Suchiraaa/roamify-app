@@ -50,9 +50,21 @@ def test_registration_and_cookies(client):
     assert data["user"]["name"] == "Alice"
     assert "csrf_token" in data
 
-    # Verify session cookie is set
+    # Verify session cookie is set with HttpOnly, Expires, Max-Age, and SameSite
     assert "roamify_session" in response.cookies
     assert "roamify_csrf" in response.cookies
+    raw_cookies = response.headers.get_list("set-cookie")
+    session_cookie_hdr = [c for c in raw_cookies if c.startswith("roamify_session=")][0]
+    assert "httponly" in session_cookie_hdr.lower()
+    assert "expires=" in session_cookie_hdr.lower()
+    assert "max-age=" in session_cookie_hdr.lower()
+    assert "samesite=lax" in session_cookie_hdr.lower()
+
+    csrf_cookie_hdr = [c for c in raw_cookies if c.startswith("roamify_csrf=")][0]
+    assert "httponly" not in csrf_cookie_hdr.lower()
+    assert "expires=" in csrf_cookie_hdr.lower()
+    assert "max-age=" in csrf_cookie_hdr.lower()
+
 
 
 def test_duplicate_registration_fails(client):
@@ -331,6 +343,55 @@ def test_csrf_token_validation(client):
     )
     assert bad_req.status_code == 403
     assert "csrf" in bad_req.json()["detail"].lower()
+
+
+def test_csrf_endpoint_cookie_attributes(client):
+    res = client.get("/api/auth/csrf")
+    assert res.status_code == 200
+    assert "csrf_token" in res.json()
+    raw_cookies = res.headers.get_list("set-cookie")
+    csrf_cookie_hdr = [c for c in raw_cookies if c.startswith("roamify_csrf=")][0]
+    assert "httponly" not in csrf_cookie_hdr.lower()
+    assert "expires=" in csrf_cookie_hdr.lower()
+    assert "max-age=" in csrf_cookie_hdr.lower()
+
+
+def test_session_survives_browser_restart_simulation(client):
+    # 1. Login in Client
+    reg = client.post(
+        "/api/auth/register",
+        json={"email": "persistent_user@example.com", "password": "password123", "name": "Persistent"}
+    )
+    assert reg.status_code == 201
+    saved_session_cookie = client.cookies.get("roamify_session")
+    saved_csrf_cookie = client.cookies.get("roamify_csrf")
+
+    # 2. Simulate closing browser and reopening by creating a fresh client with the persisted cookies
+    new_browser = TestClient(app)
+    # Set cookies explicitly on testserver.local domain so cookie jar handles persistence and deletion
+    new_browser.cookies.set("roamify_session", saved_session_cookie, domain="testserver.local", path="/")
+    new_browser.cookies.set("roamify_csrf", saved_csrf_cookie, domain="testserver.local", path="/")
+
+    # 3. Reopen browser and visit site -> /api/auth/me should succeed and return the user
+    me_res = new_browser.get("/api/auth/me")
+    assert me_res.status_code == 200
+    data = me_res.json()
+    assert data["user"]["email"] == "persistent_user@example.com"
+    assert data["user"]["name"] == "Persistent"
+
+    # 4. Multiple page refreshes in reopened browser
+    for _ in range(5):
+        refresh_res = new_browser.get("/api/auth/me")
+        assert refresh_res.status_code == 200
+        assert refresh_res.json()["user"]["email"] == "persistent_user@example.com"
+
+    # 5. Logout properly ends the session
+    logout_res = new_browser.post("/api/auth/logout")
+    assert logout_res.status_code == 200
+
+    # 6. Subsequent requests fail as unauthenticated
+    after_logout = new_browser.get("/api/auth/me")
+    assert after_logout.status_code == 401
 
 
 def test_guest_endpoints_unaffected(client):

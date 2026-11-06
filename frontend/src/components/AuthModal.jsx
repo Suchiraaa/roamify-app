@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { UserIcon, LockIcon, MailIcon, XIcon, CompassIcon } from "./Icons";
 
@@ -10,6 +10,24 @@ export default function AuthModal() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (!authModalOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setAuthModalOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [authModalOpen, setAuthModalOpen]);
 
   if (!authModalOpen) return null;
 
@@ -44,149 +62,153 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 transition-all">
+    <div
+      className="roamify-modal-backdrop"
+      onClick={() => setAuthModalOpen(false)}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="auth-modal-title"
+    >
+      <div
+        className="roamify-modal-card auth-card"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="relative px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-          <button
-            onClick={() => setAuthModalOpen(false)}
-            className="absolute top-6 right-6 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            aria-label="Close modal"
-          >
-            <XIcon size={18} />
-          </button>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+        <div className="roamify-modal-header">
+          <div className="roamify-modal-header-left">
+            <div className="roamify-modal-icon-badge emerald">
               <CompassIcon size={22} />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-slate-900 dark:text-white">
+              <h2 id="auth-modal-title" className="roamify-modal-title">
                 {isRegister ? "Join Roamify" : "Welcome Back"}
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="roamify-modal-subtitle">
                 {isRegister
                   ? "Save your road trips, bookmarks & custom routes"
                   : "Sign in to access your saved journeys & places"}
               </p>
             </div>
           </div>
-        </div>
-
-        {/* Tab switch */}
-        <div className="flex p-1 m-6 mb-4 bg-slate-100 dark:bg-slate-800/60 rounded-xl">
           <button
             type="button"
-            onClick={() => {
-              setIsRegister(false);
-              setError("");
-            }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-              !isRegister
-                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-            }`}
+            onClick={() => setAuthModalOpen(false)}
+            className="roamify-modal-close-btn"
+            aria-label="Close modal"
           >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(true);
-              setError("");
-            }}
-            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-              isRegister
-                ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm"
-                : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-            }`}
-          >
-            Create Account
+            <XIcon size={18} />
           </button>
         </div>
 
-        {/* Error message */}
-        {error && (
-          <div className="mx-6 mb-4 p-3 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/50">
-            {error}
+        <div className="roamify-modal-body">
+          {/* Tab switch */}
+          <div className="auth-tab-group">
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(false);
+                setError("");
+              }}
+              className={`auth-tab-btn ${!isRegister ? "is-active" : ""}`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setIsRegister(true);
+                setError("");
+              }}
+              className={`auth-tab-btn ${isRegister ? "is-active" : ""}`}
+            >
+              Create Account
+            </button>
           </div>
-        )}
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="px-6 pb-6 space-y-4">
-          {isRegister && (
-            <div>
-              <label className="block mb-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
-                Full Name
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-                  <UserIcon size={16} />
-                </div>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Alex Traveler"
-                  className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
-                />
-              </div>
+          {/* Error message */}
+          {error && (
+            <div className="auth-error-banner" role="alert">
+              {error}
             </div>
           )}
 
-          <div>
-            <label className="block mb-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
-              Email Address
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-                <MailIcon size={16} />
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="auth-form">
+            {isRegister && (
+              <div className="auth-field-group">
+                <label className="auth-field-label">
+                  Full Name
+                </label>
+                <div className="auth-input-wrap">
+                  <span className="auth-input-icon">
+                    <UserIcon size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="e.g. Alex Traveler"
+                    className="auth-input"
+                  />
+                </div>
               </div>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@example.com"
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block mb-1.5 text-xs font-medium text-slate-700 dark:text-slate-300">
-              Password
-            </label>
-            <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-                <LockIcon size={16} />
-              </div>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={isRegister ? "At least 6 characters" : "••••••••"}
-                className="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full py-2.5 px-4 mt-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 disabled:opacity-60 rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
-          >
-            {isSubmitting ? (
-              <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : isRegister ? (
-              "Create Account"
-            ) : (
-              "Sign In"
             )}
-          </button>
-        </form>
 
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800/60 text-center text-xs text-slate-500">
+            <div className="auth-field-group">
+              <label className="auth-field-label">
+                Email Address
+              </label>
+              <div className="auth-input-wrap">
+                <span className="auth-input-icon">
+                  <MailIcon size={16} />
+                </span>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@example.com"
+                  className="auth-input"
+                />
+              </div>
+            </div>
+
+            <div className="auth-field-group">
+              <label className="auth-field-label">
+                Password
+              </label>
+              <div className="auth-input-wrap">
+                <span className="auth-input-icon">
+                  <LockIcon size={16} />
+                </span>
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={isRegister ? "At least 6 characters" : "••••••••"}
+                  className="auth-input"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="auth-submit-btn"
+            >
+              {isSubmitting ? (
+                <span className="btn-spinner" />
+              ) : isRegister ? (
+                "Create Account"
+              ) : (
+                "Sign In"
+              )}
+            </button>
+          </form>
+        </div>
+
+        <div className="roamify-modal-footer" style={{ justifyContent: "center" }}>
           Protected with Argon2id encryption & secure session cookies.
         </div>
       </div>

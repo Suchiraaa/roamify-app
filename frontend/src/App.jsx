@@ -52,10 +52,10 @@ const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 function App() {
   const {
     user,
+    isLoading,
     logout,
     savedTrips,
     savedPlaces,
-    preferences,
     setAuthModalOpen,
     setSavedPlacesModalOpen,
     setSavedTripsModalOpen,
@@ -94,6 +94,7 @@ function App() {
   const [interest, setInterest] = useState("Nature");
   const [duration, setDuration] = useState("3 hours");
   const [profile, setProfile] = useState("driving-car");
+  const [scenicFactor, setScenicFactor] = useState("balanced");
 
   // Keep single 'interest' string and 'interests' array in sync
   const handleUpdateInterests = (newInterests) => {
@@ -418,6 +419,144 @@ function App() {
     return () => window.removeEventListener("roamify:add-waypoint", onCustomEvent);
   }, [handleAddWaypoint]);
 
+  // ── Add Custom Waypoint from Saved Places ─────────────────────────────────
+  const handleAddCustomWaypoint = useCallback((stop) => {
+    if (!stop) return;
+    const lon = Number(stop.lon ?? stop.coordinates?.[0]);
+    const lat = Number(stop.lat ?? stop.coordinates?.[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+
+    handleAddWaypoint({
+      id: stop.id || stop.place_id || `${lat}-${lon}`,
+      name: stop.name || "Custom Stop",
+      address: stop.address || stop.description || "",
+      coordinates: [lon, lat],
+    });
+  }, [handleAddWaypoint]);
+
+  // ── Load Saved Trip / Itinerary ───────────────────────────────────────────
+  const handleLoadTrip = useCallback(async (trip) => {
+    if (!trip) return;
+
+    const startName = typeof trip.start_location === "string"
+      ? trip.start_location
+      : trip.start_location?.name || "";
+
+    const destName = typeof trip.destination === "string"
+      ? trip.destination
+      : trip.destination?.name || "";
+
+    if (startName) setStartLocation(startName);
+    if (destName) setDestination(destName);
+    if (trip.budget) setBudget(trip.budget);
+
+    const loadedInterests = Array.isArray(trip.interests) && trip.interests.length > 0
+      ? trip.interests
+      : trip.interest
+      ? [trip.interest]
+      : ["Nature"];
+
+    setInterests(loadedInterests);
+    setInterest(loadedInterests.join(", "));
+
+    if (trip.duration) setDuration(trip.duration);
+    if (trip.profile) setProfile(trip.profile);
+    if (trip.scenic_factor) setScenicFactor(trip.scenic_factor);
+
+    // Custom waypoints
+    const loadedWaypoints = Array.isArray(trip.waypoints) ? trip.waypoints : [];
+    setCustomWaypoints(loadedWaypoints);
+
+    // Route geometry & coordinates
+    const geom = trip.route_geometry || trip.scenic_route?.geometry || [];
+    const hasGeom = Array.isArray(geom) && geom.length > 0;
+
+    const startLon = trip.start_location?.lon ?? (hasGeom ? geom[0][0] : null);
+    const startLat = trip.start_location?.lat ?? (hasGeom ? geom[0][1] : null);
+    const destLon = trip.destination?.lon ?? (hasGeom ? geom[geom.length - 1][0] : null);
+    const destLat = trip.destination?.lat ?? (hasGeom ? geom[geom.length - 1][1] : null);
+
+    const loadedStops = trip.stops || trip.scenic_stops || [];
+
+    const restoredTripResult = {
+      success: true,
+      start_location: {
+        name: startName || "Starting Point",
+        lat: startLat,
+        lon: startLon,
+      },
+      destination: {
+        name: destName || "Destination",
+        lat: destLat,
+        lon: destLon,
+      },
+      direct_route: trip.direct_route || {
+        distance_km: trip.direct_route?.distance_km ?? trip.distance_km ?? 0,
+        duration_min: trip.direct_route?.duration_min ?? trip.duration_min ?? 0,
+        geometry: (startLon != null && startLat != null && destLon != null && destLat != null)
+          ? [[startLon, startLat], [destLon, destLat]]
+          : geom,
+      },
+      scenic_route: {
+        distance_km: trip.distance_km ?? trip.scenic_route?.distance_km ?? 0,
+        duration_min: trip.duration_min ?? trip.scenic_route?.duration_min ?? 0,
+        geometry: geom,
+      },
+      detour_added_km: trip.detour_added_km ?? 0,
+      detour_added_min: trip.detour_added_min ?? 0,
+      scenic_stops: loadedStops,
+      provider: trip.provider || "Saved Journey",
+    };
+
+    setTripResult(restoredTripResult);
+    setShowResults(true);
+
+    if (hasGeom) {
+      setMapboxRouteGeoJson(coordsToGeoJson(geom));
+      if (restoredTripResult.direct_route.geometry?.length > 0) {
+        setMapboxDirectRouteGeoJson(coordsToGeoJson(restoredTripResult.direct_route.geometry));
+      }
+    } else if (startName && destName) {
+      // If trip was saved without route geometry, re-plan via backend API
+      setLoading(true);
+      try {
+        const freshResult = await planTrip(
+          {
+            start_location: startName,
+            destination: destName,
+            interest: loadedInterests.join(", "),
+            interests: loadedInterests,
+            budget: trip.budget || "Moderate",
+            duration: trip.duration || "3 hours",
+            profile: trip.profile || "driving-car",
+          },
+          apiKey
+        );
+        setTripResult(freshResult);
+        if (freshResult.scenic_route?.geometry?.length > 0) {
+          setMapboxRouteGeoJson(coordsToGeoJson(freshResult.scenic_route.geometry));
+        }
+        if (freshResult.direct_route?.geometry?.length > 0) {
+          setMapboxDirectRouteGeoJson(coordsToGeoJson(freshResult.direct_route.geometry));
+        }
+      } catch (err) {
+        console.warn("Could not recalculate loaded journey geometry:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    setWeatherSummary(
+      `Corridor: ${startName} to ${destName} with ${loadedStops.length} scenic stops.`
+    );
+
+    setTimeout(() => {
+      document.getElementById("primary-map-section")?.scrollIntoView({
+        behavior: "smooth",
+      });
+    }, 150);
+  }, [apiKey, coordsToGeoJson]);
+
   const geminiConfigured = backendStatus?.integrations?.gemini_ai_copilot?.configured;
   const weatherConfigured = backendStatus?.integrations?.weather_service?.configured;
 
@@ -488,6 +627,7 @@ function App() {
               type="button"
               className="nav-copilot-quick-btn"
               onClick={() => {
+                if (isLoading) return;
                 if (!user) setAuthModalOpen(true);
                 else setSavedPlacesModalOpen(true);
               }}
@@ -502,6 +642,7 @@ function App() {
               type="button"
               className="nav-copilot-quick-btn"
               onClick={() => {
+                if (isLoading) return;
                 if (!user) setAuthModalOpen(true);
                 else setSavedTripsModalOpen(true);
               }}
@@ -512,7 +653,16 @@ function App() {
             </button>
 
             {/* User Session Button */}
-            {user ? (
+            {isLoading ? (
+              <div
+                className="nav-copilot-quick-btn flex items-center gap-1.5"
+                style={{ opacity: 0.7, cursor: "default" }}
+                title="Checking session..."
+              >
+                <UserIcon size={14} />
+                <span style={{ fontSize: "12px" }}>Checking...</span>
+              </div>
+            ) : user ? (
               <div className="relative" style={{ position: "relative" }}>
                 <button
                   type="button"

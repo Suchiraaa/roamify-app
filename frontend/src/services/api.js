@@ -4,9 +4,16 @@
  * and user persistence (Authentication, Saved Trips, Saved Places, Preferences).
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL !== undefined
+const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL !== undefined
   ? import.meta.env.VITE_BACKEND_URL
   : "";
+
+// Route through same-origin reverse proxies (/api on Vite dev server and Vercel rewrites)
+// to ensure HttpOnly SameSite=Lax session cookies are sent and persisted reliably.
+const BACKEND_URL = (
+  typeof window !== "undefined" &&
+  (RAW_BACKEND_URL.includes("localhost") || RAW_BACKEND_URL.includes("127.0.0.1"))
+) ? "" : RAW_BACKEND_URL;
 
 let activeCsrfToken = "";
 
@@ -346,18 +353,23 @@ export async function logoutUser() {
 }
 
 export async function getCurrentUser() {
-  const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
-    method: "GET",
-    credentials: "include",
-  });
-  if (!res.ok) {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const data = await res.json();
+    if (data.csrf_token) {
+      setCsrfToken(data.csrf_token);
+    }
+    return data.user;
+  } catch (err) {
+    console.warn("Could not check current user session:", err);
     return null;
   }
-  const data = await res.json();
-  if (data.csrf_token) {
-    setCsrfToken(data.csrf_token);
-  }
-  return data.user;
 }
 
 // ==============================================================================

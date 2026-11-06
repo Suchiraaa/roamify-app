@@ -1,4 +1,4 @@
-﻿import os
+import os
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
@@ -21,6 +21,7 @@ from auth import (
     create_access_token,
     generate_csrf_token,
     set_auth_cookies,
+    set_csrf_cookie,
     clear_auth_cookies,
     get_current_user,
     verify_csrf,
@@ -334,14 +335,7 @@ def get_current_user_profile(
 @app.get("/api/auth/csrf")
 def get_csrf(response: Response):
     csrf_token = generate_csrf_token()
-    response.set_cookie(
-        key="roamify_csrf",
-        value=csrf_token,
-        httponly=False,
-        secure=os.getenv("COOKIE_SECURE", "false").lower() in ("true", "1", "yes"),
-        samesite=os.getenv("COOKIE_SAMESITE", "lax").lower(),
-        path="/",
-    )
+    set_csrf_cookie(response, csrf_token)
     return {"csrf_token": csrf_token}
 
 
