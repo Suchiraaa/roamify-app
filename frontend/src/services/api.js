@@ -1,9 +1,43 @@
 /**
  * Roamify API Client
- * Connects React frontend to FastAPI backend, OpenRouteServices, Weather, and Gemini AI.
+ * Connects React frontend to FastAPI backend, OpenRouteServices, Weather, Gemini AI,
+ * and user persistence (Authentication, Saved Trips, Saved Places, Preferences).
  */
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://roamify-app-khwp.onrender.com";
+const RAW_BACKEND_URL = import.meta.env.VITE_BACKEND_URL !== undefined
+  ? import.meta.env.VITE_BACKEND_URL
+  : "";
+
+// Route through same-origin reverse proxies (/api on Vite dev server and Vercel rewrites)
+// to ensure HttpOnly SameSite=Lax session cookies are sent and persisted reliably.
+const BACKEND_URL = (
+  typeof window !== "undefined" &&
+  (RAW_BACKEND_URL.includes("localhost") || RAW_BACKEND_URL.includes("127.0.0.1"))
+) ? "" : RAW_BACKEND_URL;
+
+let activeCsrfToken = "";
+
+export function setCsrfToken(token) {
+  activeCsrfToken = token || "";
+}
+
+export function getCsrfToken() {
+  if (activeCsrfToken) return activeCsrfToken;
+  if (typeof document !== "undefined") {
+    const match = document.cookie.match(/(?:^|;\s*)roamify_csrf=([^;]+)/);
+    if (match) return decodeURIComponent(match[1]);
+  }
+  return "";
+}
+
+function buildHeaders(customHeaders = {}) {
+  const headers = { ...customHeaders };
+  const csrf = getCsrfToken();
+  if (csrf) {
+    headers["X-CSRF-Token"] = csrf;
+  }
+  return headers;
+}
 
 export async function checkBackendHealth(customApiKey = "") {
   try {
@@ -13,6 +47,7 @@ export async function checkBackendHealth(customApiKey = "") {
     }
     const res = await fetch(`${BACKEND_URL}/api/health`, {
       headers,
+      credentials: "include",
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) throw new Error("Health check failed");
@@ -35,6 +70,7 @@ export async function checkBackendHealth(customApiKey = "") {
 export async function fetchPresets() {
   try {
     const res = await fetch(`${BACKEND_URL}/api/presets`, {
+      credentials: "include",
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) throw new Error("Presets failed");
@@ -92,6 +128,7 @@ export async function planTrip(tripParams, customApiKey = "") {
     const res = await fetch(`${BACKEND_URL}/api/plan-trip`, {
       method: "POST",
       headers,
+      credentials: "include",
       body: JSON.stringify({
         ...tripParams,
         ors_api_key: customApiKey || undefined,
@@ -123,6 +160,7 @@ export async function recalculateRoute(recalcParams, customApiKey = "") {
     const res = await fetch(`${BACKEND_URL}/api/recalculate-route`, {
       method: "POST",
       headers,
+      credentials: "include",
       body: JSON.stringify({
         ...recalcParams,
         ors_api_key: customApiKey || undefined,
@@ -159,7 +197,9 @@ export async function fetchCurrentWeather({ lat, lon, city } = {}) {
     throw new Error("Coordinates or city name required for weather lookup.");
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/weather/current?${params.toString()}`);
+  const res = await fetch(`${BACKEND_URL}/api/weather/current?${params.toString()}`, {
+    credentials: "include",
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Weather retrieval failed (${res.status})`);
@@ -178,7 +218,9 @@ export async function fetchWeatherForecast({ lat, lon, city } = {}) {
     throw new Error("Coordinates or city name required for forecast lookup.");
   }
 
-  const res = await fetch(`${BACKEND_URL}/api/weather/forecast?${params.toString()}`);
+  const res = await fetch(`${BACKEND_URL}/api/weather/forecast?${params.toString()}`, {
+    credentials: "include",
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Forecast retrieval failed (${res.status})`);
@@ -191,6 +233,7 @@ export async function fetchRouteWeather(points = []) {
   const res = await fetch(`${BACKEND_URL}/api/weather/route`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ points }),
   });
 
@@ -209,6 +252,7 @@ export async function fetchGeminiCopilotPlan(tripData) {
   const res = await fetch(`${BACKEND_URL}/api/copilot`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(tripData),
   });
 
@@ -223,6 +267,7 @@ export async function fetchGeminiReplan(replanData) {
   const res = await fetch(`${BACKEND_URL}/api/replan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(replanData),
   });
 
@@ -237,6 +282,7 @@ export async function sendCopilotChatMessage(message, tripContext = null, chatHi
   const res = await fetch(`${BACKEND_URL}/api/copilot/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({
       message,
       trip_context: tripContext,
@@ -248,5 +294,188 @@ export async function sendCopilotChatMessage(message, tripContext = null, chatHi
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Gemini Chat failed (${res.status})`);
   }
+  return await res.json();
+}
+
+// ==============================================================================
+// User Authentication Services (HttpOnly Cookie Sessions)
+// ==============================================================================
+
+export async function registerUser({ email, password, name }) {
+  const res = await fetch(`${BACKEND_URL}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password, name }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || "Registration failed");
+  }
+  if (data.csrf_token) {
+    setCsrfToken(data.csrf_token);
+  }
+  return data;
+}
+
+export async function loginUser({ email, password }) {
+  const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email, password }),
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.detail || "Invalid email or password");
+  }
+  if (data.csrf_token) {
+    setCsrfToken(data.csrf_token);
+  }
+  return data;
+}
+
+export async function logoutUser() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/logout`, {
+      method: "POST",
+      headers: buildHeaders(),
+      credentials: "include",
+    });
+    setCsrfToken("");
+    return await res.json().catch(() => ({ message: "Logged out" }));
+  } catch {
+    setCsrfToken("");
+    return { message: "Logged out locally" };
+  }
+}
+
+export async function getCurrentUser() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/me`, {
+      method: "GET",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const data = await res.json();
+    if (data.csrf_token) {
+      setCsrfToken(data.csrf_token);
+    }
+    return data.user;
+  } catch (err) {
+    console.warn("Could not check current user session:", err);
+    return null;
+  }
+}
+
+// ==============================================================================
+// User Preferences Services
+// ==============================================================================
+
+export async function fetchUserPreferences() {
+  const res = await fetch(`${BACKEND_URL}/api/user/preferences`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load user preferences");
+  return await res.json();
+}
+
+export async function updateUserPreferences(preferences) {
+  const res = await fetch(`${BACKEND_URL}/api/user/preferences`, {
+    method: "PUT",
+    headers: buildHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify(preferences),
+  });
+  if (!res.ok) throw new Error("Failed to save user preferences");
+  return await res.json();
+}
+
+// ==============================================================================
+// Saved Trips Services
+// ==============================================================================
+
+export async function fetchUserTrips() {
+  const res = await fetch(`${BACKEND_URL}/api/user/trips`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load saved trips");
+  return await res.json();
+}
+
+export async function saveUserTrip(tripData) {
+  const res = await fetch(`${BACKEND_URL}/api/user/trips`, {
+    method: "POST",
+    headers: buildHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify(tripData),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to save trip");
+  }
+  return await res.json();
+}
+
+export async function deleteUserTrip(tripId) {
+  const res = await fetch(`${BACKEND_URL}/api/user/trips/${tripId}`, {
+    method: "DELETE",
+    headers: buildHeaders(),
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to delete trip");
+  return await res.json();
+}
+
+// ==============================================================================
+// Saved Places Services (Favorites / Bookmarks)
+// ==============================================================================
+
+export async function fetchUserPlaces() {
+  const res = await fetch(`${BACKEND_URL}/api/user/places`, {
+    method: "GET",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to load saved places");
+  return await res.json();
+}
+
+export async function saveUserPlace(placeData) {
+  const res = await fetch(`${BACKEND_URL}/api/user/places`, {
+    method: "POST",
+    headers: buildHeaders({ "Content-Type": "application/json" }),
+    credentials: "include",
+    body: JSON.stringify(placeData),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || "Failed to bookmark place");
+  }
+  return await res.json();
+}
+
+export async function deleteUserPlace(placeDbId) {
+  const res = await fetch(`${BACKEND_URL}/api/user/places/${placeDbId}`, {
+    method: "DELETE",
+    headers: buildHeaders(),
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to remove saved place");
+  return await res.json();
+}
+
+export async function deleteUserPlaceByExternalId(placeId) {
+  const res = await fetch(`${BACKEND_URL}/api/user/places/by-place-id/${encodeURIComponent(placeId)}`, {
+    method: "DELETE",
+    headers: buildHeaders(),
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to remove bookmark");
   return await res.json();
 }

@@ -9,6 +9,10 @@ import UnifiedTripPlanner from "./components/UnifiedTripPlanner";
 import RouteSummary from "./components/RouteSummary";
 import ScenicStopsList from "./components/ScenicStopsList";
 import ApiKeyModal from "./components/ApiKeyModal";
+import AuthModal from "./components/AuthModal";
+import SavedPlacesModal from "./components/SavedPlacesModal";
+import SavedTripsModal from "./components/SavedTripsModal";
+import { useAuth } from "./context/AuthContext";
 import Speedometer from "./speedometer.jsx";
 import NearbyPlaces from "./NearbyPlaces.jsx";
 import WeatherWidget from "./components/WeatherWidget";
@@ -27,6 +31,9 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   CloudIcon,
+  UserIcon,
+  BookmarkIcon,
+  LogOutIcon,
 } from "./components/Icons";
 
 // Shared Geolocation Hook
@@ -43,6 +50,19 @@ import {
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
 function App() {
+  const {
+    user,
+    isLoading,
+    logout,
+    savedTrips,
+    savedPlaces,
+    setAuthModalOpen,
+    setSavedPlacesModalOpen,
+    setSavedTripsModalOpen,
+  } = useAuth();
+
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
   // ── Site-wide Day/Night Mode State ──────────────────────────────────────
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("roamify_theme");
@@ -74,6 +94,7 @@ function App() {
   const [interest, setInterest] = useState("Nature");
   const [duration, setDuration] = useState("3 hours");
   const [profile, setProfile] = useState("driving-car");
+  const [scenicFactor, setScenicFactor] = useState("balanced");
 
   // Keep single 'interest' string and 'interests' array in sync
   const handleUpdateInterests = (newInterests) => {
@@ -398,6 +419,144 @@ function App() {
     return () => window.removeEventListener("roamify:add-waypoint", onCustomEvent);
   }, [handleAddWaypoint]);
 
+  // ── Add Custom Waypoint from Saved Places ─────────────────────────────────
+  const handleAddCustomWaypoint = useCallback((stop) => {
+    if (!stop) return;
+    const lon = Number(stop.lon ?? stop.coordinates?.[0]);
+    const lat = Number(stop.lat ?? stop.coordinates?.[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+
+    handleAddWaypoint({
+      id: stop.id || stop.place_id || `${lat}-${lon}`,
+      name: stop.name || "Custom Stop",
+      address: stop.address || stop.description || "",
+      coordinates: [lon, lat],
+    });
+  }, [handleAddWaypoint]);
+
+  // ── Load Saved Trip / Itinerary ───────────────────────────────────────────
+  const handleLoadTrip = useCallback(async (trip) => {
+    if (!trip) return;
+
+    const startName = typeof trip.start_location === "string"
+      ? trip.start_location
+      : trip.start_location?.name || "";
+
+    const destName = typeof trip.destination === "string"
+      ? trip.destination
+      : trip.destination?.name || "";
+
+    if (startName) setStartLocation(startName);
+    if (destName) setDestination(destName);
+    if (trip.budget) setBudget(trip.budget);
+
+    const loadedInterests = Array.isArray(trip.interests) && trip.interests.length > 0
+      ? trip.interests
+      : trip.interest
+      ? [trip.interest]
+      : ["Nature"];
+
+    setInterests(loadedInterests);
+    setInterest(loadedInterests.join(", "));
+
+    if (trip.duration) setDuration(trip.duration);
+    if (trip.profile) setProfile(trip.profile);
+    if (trip.scenic_factor) setScenicFactor(trip.scenic_factor);
+
+    // Custom waypoints
+    const loadedWaypoints = Array.isArray(trip.waypoints) ? trip.waypoints : [];
+    setCustomWaypoints(loadedWaypoints);
+
+    // Route geometry & coordinates
+    const geom = trip.route_geometry || trip.scenic_route?.geometry || [];
+    const hasGeom = Array.isArray(geom) && geom.length > 0;
+
+    const startLon = trip.start_location?.lon ?? (hasGeom ? geom[0][0] : null);
+    const startLat = trip.start_location?.lat ?? (hasGeom ? geom[0][1] : null);
+    const destLon = trip.destination?.lon ?? (hasGeom ? geom[geom.length - 1][0] : null);
+    const destLat = trip.destination?.lat ?? (hasGeom ? geom[geom.length - 1][1] : null);
+
+    const loadedStops = trip.stops || trip.scenic_stops || [];
+
+    const restoredTripResult = {
+      success: true,
+      start_location: {
+        name: startName || "Starting Point",
+        lat: startLat,
+        lon: startLon,
+      },
+      destination: {
+        name: destName || "Destination",
+        lat: destLat,
+        lon: destLon,
+      },
+      direct_route: trip.direct_route || {
+        distance_km: trip.direct_route?.distance_km ?? trip.distance_km ?? 0,
+        duration_min: trip.direct_route?.duration_min ?? trip.duration_min ?? 0,
+        geometry: (startLon != null && startLat != null && destLon != null && destLat != null)
+          ? [[startLon, startLat], [destLon, destLat]]
+          : geom,
+      },
+      scenic_route: {
+        distance_km: trip.distance_km ?? trip.scenic_route?.distance_km ?? 0,
+        duration_min: trip.duration_min ?? trip.scenic_route?.duration_min ?? 0,
+        geometry: geom,
+      },
+      detour_added_km: trip.detour_added_km ?? 0,
+      detour_added_min: trip.detour_added_min ?? 0,
+      scenic_stops: loadedStops,
+      provider: trip.provider || "Saved Journey",
+    };
+
+    setTripResult(restoredTripResult);
+    setShowResults(true);
+
+    if (hasGeom) {
+      setMapboxRouteGeoJson(coordsToGeoJson(geom));
+      if (restoredTripResult.direct_route.geometry?.length > 0) {
+        setMapboxDirectRouteGeoJson(coordsToGeoJson(restoredTripResult.direct_route.geometry));
+      }
+    } else if (startName && destName) {
+      // If trip was saved without route geometry, re-plan via backend API
+      setLoading(true);
+      try {
+        const freshResult = await planTrip(
+          {
+            start_location: startName,
+            destination: destName,
+            interest: loadedInterests.join(", "),
+            interests: loadedInterests,
+            budget: trip.budget || "Moderate",
+            duration: trip.duration || "3 hours",
+            profile: trip.profile || "driving-car",
+          },
+          apiKey
+        );
+        setTripResult(freshResult);
+        if (freshResult.scenic_route?.geometry?.length > 0) {
+          setMapboxRouteGeoJson(coordsToGeoJson(freshResult.scenic_route.geometry));
+        }
+        if (freshResult.direct_route?.geometry?.length > 0) {
+          setMapboxDirectRouteGeoJson(coordsToGeoJson(freshResult.direct_route.geometry));
+        }
+      } catch (err) {
+        console.warn("Could not recalculate loaded journey geometry:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    setWeatherSummary(
+      `Corridor: ${startName} to ${destName} with ${loadedStops.length} scenic stops.`
+    );
+
+    setTimeout(() => {
+      document.getElementById("primary-map-section")?.scrollIntoView({
+        behavior: "smooth",
+      });
+    }, 150);
+  }, [apiKey, coordsToGeoJson]);
+
   const geminiConfigured = backendStatus?.integrations?.gemini_ai_copilot?.configured;
   const weatherConfigured = backendStatus?.integrations?.weather_service?.configured;
 
@@ -463,6 +622,106 @@ function App() {
               </a>
             )}
 
+            {/* Saved Places */}
+            <button
+              type="button"
+              className="nav-copilot-quick-btn"
+              onClick={() => {
+                if (isLoading) return;
+                if (!user) setAuthModalOpen(true);
+                else setSavedPlacesModalOpen(true);
+              }}
+              title="Saved Places & Bookmarks"
+            >
+              <BookmarkIcon size={14} />
+              <span>Saved Places{savedPlaces.length > 0 ? ` (${savedPlaces.length})` : ""}</span>
+            </button>
+
+            {/* Saved Trips */}
+            <button
+              type="button"
+              className="nav-copilot-quick-btn"
+              onClick={() => {
+                if (isLoading) return;
+                if (!user) setAuthModalOpen(true);
+                else setSavedTripsModalOpen(true);
+              }}
+              title="Saved Trips & Itineraries"
+            >
+              <RouteIcon size={14} />
+              <span>Saved Trips{savedTrips.length > 0 ? ` (${savedTrips.length})` : ""}</span>
+            </button>
+
+            {/* User Session Button */}
+            {isLoading ? (
+              <div
+                className="nav-copilot-quick-btn flex items-center gap-1.5"
+                style={{ opacity: 0.7, cursor: "default" }}
+                title="Checking session..."
+              >
+                <UserIcon size={14} />
+                <span style={{ fontSize: "12px" }}>Checking...</span>
+              </div>
+            ) : user ? (
+              <div className="relative" style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="nav-copilot-quick-btn is-active flex items-center gap-1.5"
+                  onClick={() => setUserMenuOpen((prev) => !prev)}
+                >
+                  <UserIcon size={14} />
+                  <span>{user.name || user.email.split("@")[0]}</span>
+                </button>
+                {userMenuOpen && (
+                  <div className="user-nav-dropdown">
+                    <div className="user-nav-email truncate">
+                      {user.email}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setSavedPlacesModalOpen(true);
+                      }}
+                    >
+                      <BookmarkIcon size={13} />
+                      <span>Saved Places ({savedPlaces.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setSavedTripsModalOpen(true);
+                      }}
+                    >
+                      <RouteIcon size={13} />
+                      <span>Saved Trips ({savedTrips.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="user-nav-logout-btn"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        logout();
+                      }}
+                    >
+                      <LogOutIcon size={13} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="nav-copilot-quick-btn flex items-center gap-1.5"
+                onClick={() => setAuthModalOpen(true)}
+              >
+                <UserIcon size={14} />
+                <span>Sign In</span>
+              </button>
+            )}
+
             {/* Day / Night Theme Toggle */}
             <button
               type="button"
@@ -499,12 +758,14 @@ function App() {
       {/* ── Main Application Content ───────────────────────────────────── */}
       <main className="app-main-layout">
         {/* ── Hero Section / Travel Editorial Experience ─────────────────── */}
-        <section className="app-hero-banner" aria-label="Roamify Introduction">
+                {/* ── Hero Section / Travel Editorial Experience ─────────────────── */}
+        <section className="app-hero-banner" aria-label="Roamify Travel Atelier">
+          <div className="hero-photography-backdrop" aria-hidden="true" />
           <div className="hero-atmosphere-backdrop" aria-hidden="true" />
           <div className="hero-content-wrap">
             <div className="hero-eyebrow-container">
-              <CompassIcon size={13} className="hero-eyebrow-compass" />
-              <span className="hero-eyebrow">CURATED SCENIC ROUTING · TRAVEL EDITORIAL</span>
+              <CompassIcon size={14} className="hero-eyebrow-compass" />
+              <span className="hero-eyebrow">CURATED SCENIC ROUTING · TRAVEL ATELIER</span>
             </div>
 
             <h1 className="hero-title">
@@ -512,9 +773,18 @@ function App() {
             </h1>
 
             <p className="hero-subtitle">
-              Roamify intelligently orchestrates scenic detours, panoramic vistas, heritage landmarks, 
-              live meteorological forecasts, and Gemini AI road-trip guidance along your travel corridor.
+              Engineered for thoughtful travelers. Roamify orchestrates panoramic detours, heritage vistas,
+              live meteorological forecasts, and Gemini AI road-trip intelligence along your travel corridor.
             </p>
+
+            {/* Curated Editorial Highlights Strip */}
+            <div className="hero-highlights-strip">
+              <span className="highlight-pill">✦ OpenCartography Engine</span>
+              <span className="highlight-dot">·</span>
+              <span className="highlight-pill">✦ Adaptive Elliptical Geometry</span>
+              <span className="highlight-dot">·</span>
+              <span className="highlight-pill">✦ Mathematical Detour Caps</span>
+            </div>
 
             {/* Actions Row */}
             <div className="hero-actions-row">
@@ -531,7 +801,7 @@ function App() {
                 }}
               >
                 <RouteIcon size={17} className="btn-icon" />
-                <span>Plan My Trip</span>
+                <span>Plan Scenic Route</span>
               </button>
 
               <button
@@ -545,7 +815,7 @@ function App() {
                 }}
               >
                 <CompassIcon size={17} className="btn-icon" />
-                <span>Explore Live Map</span>
+                <span>Explore Interactive Map</span>
               </button>
 
               <button
@@ -556,38 +826,6 @@ function App() {
                 <SparklesIcon size={16} className="btn-icon sparkle-hero-icon" />
                 <span>Gemini AI Co-Pilot</span>
               </button>
-            </div>
-
-            {/* Feature Telemetry Pillars Strip */}
-            <div className="hero-pillars-grid">
-              <div className="hero-pillar-item">
-                <ShieldCheckIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Corridor Geometry</strong>
-                  <span>Dynamically scored detours</span>
-                </div>
-              </div>
-              <div className="hero-pillar-item">
-                <ClockIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Strict Time Budget</strong>
-                  <span>Zero arrival overshoots</span>
-                </div>
-              </div>
-              <div className="hero-pillar-item">
-                <CloudIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Live Weather</strong>
-                  <span>OpenWeatherMap observations</span>
-                </div>
-              </div>
-              <div className="hero-pillar-item">
-                <SparklesIcon size={16} className="pillar-icon" />
-                <div>
-                  <strong>Gemini AI Co-Pilot</strong>
-                  <span>Candid journey strategies</span>
-                </div>
-              </div>
             </div>
           </div>
         </section>
@@ -639,9 +877,15 @@ function App() {
         {/* ── Primary Map Section (Single Mapbox Canvas) ────────────────── */}
         <section id="primary-map-section" className="primary-map-section" aria-label="Interactive Route Map">
           <div className="map-section-header">
-            <div>
-              <span className="section-eyebrow">CARTOGRAPHIC CANVAS</span>
+            <div className="map-title-block">
+              <div className="section-eyebrow-badge">
+                <span className="eyebrow-pulse-dot" />
+                <span className="section-eyebrow">CARTOGRAPHIC CANVAS</span>
+              </div>
               <h2 className="map-section-title">Interactive Corridor Map</h2>
+              <p className="map-section-subtitle">
+                Explore real-time GPS telemetry, panoramic waypoints, and dynamically calculated detours.
+              </p>
             </div>
             <div className="map-section-actions">
               <span className="map-projection-tag">Mapbox GL · WGS84 Projection</span>
@@ -703,18 +947,18 @@ function App() {
           </section>
         )}
 
-        {/* ── Results Section (Route Metrics & Scenic Stops) ────────────── */}
+        {/* ── Results Section (Route Metrics, Scenic Stops, Weather & Co-Pilot) ── */}
         {showResults && tripResult && (
           <section id="route-summary-section" className="results-container">
             <div className="results-header-bar">
-              <div>
+              <div className="results-title-group">
                 <span className="results-eyebrow">CURATED DETOUR ITINERARY</span>
                 <h2 className="results-title">
-                  {tripResult.start_location.name} → {tripResult.destination.name}
+                  {tripResult.start_location.name} <span className="route-arrow-icon">→</span> {tripResult.destination.name}
                 </h2>
               </div>
               <div className="results-meta-pill">
-                <span>{interests.join(" + ")} focus</span>
+                <span className="meta-interest-tag">{interests.join(" + ")} focus</span>
                 <span className="meta-dot">·</span>
                 <span>{budget} budget</span>
                 <span className="meta-dot">·</span>
@@ -722,48 +966,65 @@ function App() {
               </div>
             </div>
 
-            {/* Route Summary Comparison */}
-            <RouteSummary
-              directRoute={tripResult.direct_route}
-              scenicRoute={tripResult.scenic_route}
-              detourAddedKm={tripResult.detour_added_km}
-              detourAddedMin={tripResult.detour_added_min}
-              stopsCount={
-                (tripResult.scenic_stops?.filter((s) => s.is_included !== false).length || 0) +
-                customWaypoints.length
-              }
-              provider={tripResult.provider}
-            />
+            {/* Asymmetric Command Workspace Grid */}
+            <div className="results-asymmetric-deck">
+              <div className="results-deck-left">
+                {/* Route Summary Comparison */}
+                <RouteSummary
+                  directRoute={tripResult.direct_route}
+                  scenicRoute={tripResult.scenic_route}
+                  detourAddedKm={tripResult.detour_added_km}
+                  detourAddedMin={tripResult.detour_added_min}
+                  stopsCount={
+                    (tripResult.scenic_stops?.filter((s) => s.is_included !== false).length || 0) +
+                    customWaypoints.length
+                  }
+                  provider={tripResult.provider}
+                  startLocation={startLocation}
+                  destination={destination}
+                  stops={tripResult.scenic_stops}
+                  tripParams={{
+                    interests,
+                    budget,
+                    duration,
+                    profile,
+                    scenic_factor: scenicFactor,
+                  }}
+                />
 
-            {/* Scenic Stops Along The Corridor */}
-            <ScenicStopsList
-              stops={tripResult.scenic_stops}
-              onToggleStop={handleToggleStop}
-              onFocusStop={handleFocusPlace}
-              interest={interest}
-            />
+                {/* Corridor Weather Outlook */}
+                <div id="corridor-weather-section" className="deck-weather-panel">
+                  <WeatherWidget
+                    origin={tripResult.start_location}
+                    destination={tripResult.destination}
+                    scenicStops={tripResult.scenic_stops}
+                    customWaypoints={customWaypoints}
+                  />
+                </div>
+              </div>
 
-            {/* ── Feature Integration: Real Weather Corridor Outlook ──────── */}
-            <div id="corridor-weather-section">
-              <WeatherWidget
-                origin={tripResult.start_location}
-                destination={tripResult.destination}
-                scenicStops={tripResult.scenic_stops}
-                customWaypoints={customWaypoints}
-              />
-            </div>
+              <div className="results-deck-right">
+                {/* Scenic Stops Along The Corridor */}
+                <ScenicStopsList
+                  stops={tripResult.scenic_stops}
+                  onToggleStop={handleToggleStop}
+                  onFocusStop={handleFocusPlace}
+                  interest={interest}
+                />
 
-            {/* ── Feature Integration: Gemini AI Co-Pilot Road-Trip Strategy ── */}
-            <div id="gemini-copilot-section">
-              <GeminiCopilot
-                startLocation={tripResult.start_location}
-                destination={tripResult.destination}
-                interests={interests}
-                budget={budget}
-                duration={duration}
-                tripResult={tripResult}
-                weatherSummary={weatherSummary}
-              />
+                {/* Gemini AI Co-Pilot Road-Trip Strategy */}
+                <div id="gemini-copilot-section" className="deck-copilot-panel">
+                  <GeminiCopilot
+                    startLocation={tripResult.start_location}
+                    destination={tripResult.destination}
+                    interests={interests}
+                    budget={budget}
+                    duration={duration}
+                    tripResult={tripResult}
+                    weatherSummary={weatherSummary}
+                  />
+                </div>
+              </div>
             </div>
           </section>
         )}
@@ -845,6 +1106,24 @@ function App() {
         isOpen={isCopilotOpen}
         onClose={() => setIsCopilotOpen(false)}
         isDrawer={true}
+      />
+
+      {/* ── User Auth & Data Persistence Modals ───────────────────────── */}
+      <AuthModal />
+      <SavedPlacesModal
+        onSelectPlace={(place) => {
+          handleFocusPlace({
+            lat: place.lat,
+            lon: place.lon,
+            name: place.name,
+          });
+        }}
+        onAddStop={(stop) => {
+          handleAddCustomWaypoint(stop);
+        }}
+      />
+      <SavedTripsModal
+        onLoadTrip={handleLoadTrip}
       />
 
       {/* ── ORS & Backend Engine Settings Modal ─────────────────────────── */}

@@ -7,13 +7,17 @@ import {
   CheckIcon,
   PlusIcon,
   CategoryIcon,
+  BookmarkIcon,
 } from "./Icons";
+import { useAuth } from "../context/AuthContext";
 
 export default function ScenicStopsList({
   stops = [],
   onToggleStop,
   onFocusStop,
 }) {
+  const { isPlaceSaved, bookmarkPlace, unbookmarkPlace } = useAuth();
+
   if (!stops || stops.length === 0) {
     return (
       <div className="empty-stops-box">
@@ -39,6 +43,7 @@ export default function ScenicStopsList({
       <div className="stops-grid">
         {stops.map((stop, idx) => {
           const isIncluded = stop.is_included !== false;
+          const isSaved = isPlaceSaved(stop.id);
 
           return (
             <div
@@ -56,7 +61,36 @@ export default function ScenicStopsList({
                 <div className="stop-details">
                   <div className="stop-title-row">
                     <h4 className="stop-title">{stop.name}</h4>
-                    <span className="category-tag">{stop.category || "Scenic"}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="category-tag">{stop.category || "Scenic"}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (isSaved) {
+                            unbookmarkPlace(stop.id);
+                          } else {
+                            bookmarkPlace({
+                              id: stop.id,
+                              name: stop.name,
+                              category: stop.category,
+                              lat: stop.lat,
+                              lon: stop.lon,
+                              description: stop.description,
+                            });
+                          }
+                        }}
+                        className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                          isSaved
+                            ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                            : "text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700 hover:border-amber-500/30"
+                        }`}
+                        title={isSaved ? "Remove from Saved Places" : "Save to Bookmarks"}
+                        aria-label={isSaved ? "Remove from Saved Places" : "Save to Bookmarks"}
+                      >
+                        <BookmarkIcon size={14} filled={isSaved} />
+                      </button>
+                    </div>
                   </div>
 
                   <p className="stop-description">{stop.description}</p>

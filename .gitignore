@@ -24,6 +24,10 @@ ENV/
 backend/venv/
 backend/.venv/
 
+# SQLite databases
+*.db
+*.sqlite3
+
 # Environment Variables & Secrets - never commit real tokens
 .env
 .env.*

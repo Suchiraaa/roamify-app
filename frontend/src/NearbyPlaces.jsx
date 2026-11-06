@@ -6,7 +6,9 @@ import {
   CheckIcon,
   PlusIcon,
   AlertTriangleIcon,
+  BookmarkIcon,
 } from "./components/Icons";
+import { useAuth } from "./context/AuthContext";
 
 function NearbyPlaces({
   userLocation,
@@ -15,6 +17,7 @@ function NearbyPlaces({
   onRemoveWaypoint,
   onFocusPlace,
 }) {
+  const { isPlaceSaved, bookmarkPlace, unbookmarkPlace } = useAuth();
   const [places, setPlaces] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -80,49 +83,44 @@ function NearbyPlaces({
       }));
 
       setPlaces(mappedPlaces);
-      if (mappedPlaces.length === 0) {
-        setError("No major landmarks found in the immediate vicinity. Try searching in a broader area.");
-      }
     } catch (err) {
-      setError(err.message || "Something went wrong fetching nearby places.");
+      setError(err.message || "Failed to locate nearby attractions.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleTogglePlace = (place) => {
-    const isAlreadyAdded = activeWaypoints.some((wp) => wp.id === place.id);
-
-    if (isAlreadyAdded) {
-      if (onRemoveWaypoint) {
-        onRemoveWaypoint(place.id);
-      }
+    const isAdded = activeWaypoints.some((wp) => wp.id === place.id);
+    if (isAdded) {
+      if (onRemoveWaypoint) onRemoveWaypoint(place.id);
     } else {
       if (onAddWaypoint) {
-        onAddWaypoint(place);
+        onAddWaypoint({
+          id: place.id,
+          name: place.name,
+          lat: place.coordinates[1],
+          lon: place.coordinates[0],
+          is_stop: true,
+        });
       }
-      // Also dispatch custom event for backward compatibility
-      window.dispatchEvent(
-        new CustomEvent("roamify:add-waypoint", {
-          detail: {
-            id: place.id,
-            name: place.name,
-            address: place.address,
-            coordinates: place.coordinates,
-          },
-        })
-      );
     }
   };
 
   return (
-    <section className="nearby-places-panel" aria-label="Explore Nearby Places">
+    <section className="nearby-places-card" aria-label="Nearby Scenic Stops Discovery">
       <div className="nearby-header">
-        <div>
-          <span className="section-eyebrow">VICINITY EXPLORATION</span>
-          <h3 className="panel-title">Explore Nearby Detours</h3>
-          <p className="panel-subtitle">Discover scenic parks, historical landmarks, and panoramas around your coordinates.</p>
+        <div className="nearby-title-group">
+          <div className="nearby-badge">
+            <CompassIcon size={14} />
+            <span>LOCAL EXPLORATION</span>
+          </div>
+          <h3 className="nearby-title">Nearby Scenic Attractions</h3>
+          <p className="nearby-subtitle">
+            Find tourist landmarks, state parks, and scenic lookouts near your current position.
+          </p>
         </div>
+
         <button
           type="button"
           className="btn-discover"
@@ -131,21 +129,21 @@ function NearbyPlaces({
         >
           {loading ? (
             <>
-              <span className="btn-spinner" />
-              <span>Locating Places...</span>
+              <span className="spinner-sm" />
+              <span>Scanning...</span>
             </>
           ) : (
             <>
               <SearchIcon size={14} />
-              <span>Find Nearby Places</span>
+              <span>Discover Nearby</span>
             </>
           )}
         </button>
       </div>
 
       {error && (
-        <div className="nearby-error-alert" role="alert">
-          <AlertTriangleIcon size={16} className="alert-svg-icon" />
+        <div className="nearby-error-banner" role="alert">
+          <AlertTriangleIcon size={16} />
           <span>{error}</span>
         </div>
       )}
@@ -154,12 +152,41 @@ function NearbyPlaces({
         <div className="nearby-grid">
           {places.map((place) => {
             const isAdded = activeWaypoints.some((wp) => wp.id === place.id);
+            const isSaved = isPlaceSaved(place.id);
+
             return (
               <article key={place.id} className={`nearby-place-card ${isAdded ? "is-in-trip" : ""}`}>
                 <div className="place-info">
                   <div className="place-title-row">
                     <CompassIcon size={14} className="place-icon-badge" />
                     <h4 className="place-name">{place.name}</h4>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (isSaved) {
+                          unbookmarkPlace(place.id);
+                        } else {
+                          bookmarkPlace({
+                            id: place.id,
+                            name: place.name,
+                            category: "Attraction",
+                            lat: place.coordinates[1],
+                            lon: place.coordinates[0],
+                            address: place.address,
+                          });
+                        }
+                      }}
+                      className={`ml-auto p-1 rounded-md border transition-colors cursor-pointer ${
+                        isSaved
+                          ? "bg-amber-500/10 text-amber-500 border-amber-500/30"
+                          : "text-slate-400 hover:text-amber-500 border-slate-200 dark:border-slate-700"
+                      }`}
+                      title={isSaved ? "Remove from Saved Places" : "Save to Bookmarks"}
+                      aria-label={isSaved ? "Remove from Saved Places" : "Save to Bookmarks"}
+                    >
+                      <BookmarkIcon size={13} filled={isSaved} />
+                    </button>
                   </div>
                   {place.address && <p className="place-address">{place.address}</p>}
                 </div>
