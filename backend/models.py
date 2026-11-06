@@ -158,3 +158,112 @@ class PlaceItem(BaseModel):
     icon: str = "pin"
     source: str = "OpenStreetMap"
     verified: bool = True
+
+
+# ==============================================================================
+# Authentication & User Persistence Models
+# ==============================================================================
+
+class UserRegisterRequest(BaseModel):
+    email: str = Field(..., min_length=3, max_length=255, description="User email address")
+    password: str = Field(..., min_length=6, max_length=128, description="User password")
+    name: Optional[str] = Field(default=None, max_length=100, description="Display name")
+
+
+class UserLoginRequest(BaseModel):
+    email: str = Field(..., description="User email address")
+    password: str = Field(..., description="User password")
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class MessageResponse(BaseModel):
+    message: str
+    status: str = "success"
+
+
+class UserPreferencesUpdate(BaseModel):
+    default_interests: Optional[List[str]] = None
+    default_budget: Optional[str] = None
+    default_duration: Optional[str] = None
+    preferred_transport_mode: Optional[str] = None
+    scenic_factor: Optional[str] = None
+
+
+class UserPreferencesResponse(BaseModel):
+    user_id: str
+    default_interests: List[str] = []
+    default_budget: Optional[str] = "Moderate"
+    default_duration: Optional[str] = "3 hours"
+    preferred_transport_mode: Optional[str] = "driving-car"
+    scenic_factor: Optional[str] = "balanced"
+
+
+class SaveTripRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=200)
+    start_location: str
+    destination: str
+    interests: Optional[List[str]] = None
+    budget: Optional[str] = None
+    duration: Optional[str] = None
+    profile: Optional[str] = "driving-car"
+    scenic_factor: Optional[str] = "balanced"
+    route_geometry: Optional[List[List[float]]] = None
+    distance_km: Optional[float] = None
+    duration_min: Optional[float] = None
+    stops: Optional[List[Dict[str, Any]]] = None
+    waypoints: Optional[List[Dict[str, Any]]] = None
+    custom_notes: Optional[str] = None
+
+
+class SavedTripResponse(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    start_location: str
+    destination: str
+    interests: Optional[List[str]] = None
+    budget: Optional[str] = None
+    duration: Optional[str] = None
+    profile: Optional[str] = None
+    scenic_factor: Optional[str] = None
+    route_geometry: Optional[List[List[float]]] = None
+    distance_km: Optional[float] = None
+    duration_min: Optional[float] = None
+    stops: Optional[List[Dict[str, Any]]] = None
+    waypoints: Optional[List[Dict[str, Any]]] = None
+    custom_notes: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+
+class SavePlaceRequest(BaseModel):
+    place_id: str = Field(..., description="External map provider identifier (e.g., OSM node ID, Nominatim ID)")
+    name: str = Field(..., min_length=1, max_length=255)
+    category: Optional[str] = None
+    lat: float
+    lon: float
+    address: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    tags: Optional[Dict[str, Any]] = None
+
+
+class SavedPlaceResponse(BaseModel):
+    id: str = Field(..., description="Database UUID identifier")
+    user_id: str
+    place_id: str = Field(..., description="External map provider identifier")
+    name: str
+    category: Optional[str] = None
+    lat: float
+    lon: float
+    address: Optional[str] = None
+    description: Optional[str] = None
+    image_url: Optional[str] = None
+    tags: Optional[Dict[str, Any]] = None
+    created_at: Optional[str] = None

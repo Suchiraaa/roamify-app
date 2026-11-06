@@ -9,6 +9,10 @@ import UnifiedTripPlanner from "./components/UnifiedTripPlanner";
 import RouteSummary from "./components/RouteSummary";
 import ScenicStopsList from "./components/ScenicStopsList";
 import ApiKeyModal from "./components/ApiKeyModal";
+import AuthModal from "./components/AuthModal";
+import SavedPlacesModal from "./components/SavedPlacesModal";
+import SavedTripsModal from "./components/SavedTripsModal";
+import { useAuth } from "./context/AuthContext";
 import Speedometer from "./speedometer.jsx";
 import NearbyPlaces from "./NearbyPlaces.jsx";
 import WeatherWidget from "./components/WeatherWidget";
@@ -27,6 +31,9 @@ import {
   ShieldCheckIcon,
   SparklesIcon,
   CloudIcon,
+  UserIcon,
+  BookmarkIcon,
+  LogOutIcon,
 } from "./components/Icons";
 
 // Shared Geolocation Hook
@@ -43,6 +50,19 @@ import {
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN || "";
 
 function App() {
+  const {
+    user,
+    logout,
+    savedTrips,
+    savedPlaces,
+    preferences,
+    setAuthModalOpen,
+    setSavedPlacesModalOpen,
+    setSavedTripsModalOpen,
+  } = useAuth();
+
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
   // ── Site-wide Day/Night Mode State ──────────────────────────────────────
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem("roamify_theme");
@@ -463,6 +483,111 @@ function App() {
               </a>
             )}
 
+            {/* Saved Places */}
+            <button
+              type="button"
+              className="nav-copilot-quick-btn"
+              onClick={() => {
+                if (!user) setAuthModalOpen(true);
+                else setSavedPlacesModalOpen(true);
+              }}
+              title="Saved Places & Bookmarks"
+            >
+              <BookmarkIcon size={14} />
+              <span>Saved Places{savedPlaces.length > 0 ? ` (${savedPlaces.length})` : ""}</span>
+            </button>
+
+            {/* Saved Trips */}
+            <button
+              type="button"
+              className="nav-copilot-quick-btn"
+              onClick={() => {
+                if (!user) setAuthModalOpen(true);
+                else setSavedTripsModalOpen(true);
+              }}
+              title="Saved Trips & Itineraries"
+            >
+              <RouteIcon size={14} />
+              <span>Saved Trips{savedTrips.length > 0 ? ` (${savedTrips.length})` : ""}</span>
+            </button>
+
+            {/* User Session Button */}
+            {user ? (
+              <div className="relative" style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="nav-copilot-quick-btn is-active flex items-center gap-1.5"
+                  onClick={() => setUserMenuOpen((prev) => !prev)}
+                >
+                  <UserIcon size={14} />
+                  <span>{user.name || user.email.split("@")[0]}</span>
+                </button>
+                {userMenuOpen && (
+                  <div
+                    className="user-nav-dropdown"
+                    style={{
+                      position: "absolute",
+                      right: 0,
+                      top: "calc(100% + 8px)",
+                      width: "200px",
+                      backgroundColor: "var(--card-bg, #ffffff)",
+                      borderRadius: "12px",
+                      boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+                      border: "1px solid var(--border-color, #e2e8f0)",
+                      zIndex: 100,
+                      padding: "8px 0",
+                    }}
+                  >
+                    <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-color, #e2e8f0)", fontSize: "11px", opacity: 0.7 }} className="truncate">
+                      {user.email}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setSavedPlacesModalOpen(true);
+                      }}
+                      style={{ width: "100%", textAlign: "left", padding: "8px 16px", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+                    >
+                      <BookmarkIcon size={13} />
+                      <span>Saved Places ({savedPlaces.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        setSavedTripsModalOpen(true);
+                      }}
+                      style={{ width: "100%", textAlign: "left", padding: "8px 16px", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", cursor: "pointer", color: "inherit" }}
+                    >
+                      <RouteIcon size={13} />
+                      <span>Saved Trips ({savedTrips.length})</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        logout();
+                      }}
+                      style={{ width: "100%", textAlign: "left", padding: "8px 16px", fontSize: "12px", display: "flex", alignItems: "center", gap: "8px", background: "none", border: "none", cursor: "pointer", color: "#ef4444" }}
+                    >
+                      <LogOutIcon size={13} />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="nav-copilot-quick-btn flex items-center gap-1.5"
+                onClick={() => setAuthModalOpen(true)}
+              >
+                <UserIcon size={14} />
+                <span>Sign In</span>
+              </button>
+            )}
+
             {/* Day / Night Theme Toggle */}
             <button
               type="button"
@@ -733,6 +858,16 @@ function App() {
                 customWaypoints.length
               }
               provider={tripResult.provider}
+              startLocation={startLocation}
+              destination={destination}
+              stops={tripResult.scenic_stops}
+              tripParams={{
+                interests,
+                budget,
+                duration,
+                profile,
+                scenic_factor: scenicFactor,
+              }}
             />
 
             {/* Scenic Stops Along The Corridor */}
@@ -845,6 +980,24 @@ function App() {
         isOpen={isCopilotOpen}
         onClose={() => setIsCopilotOpen(false)}
         isDrawer={true}
+      />
+
+      {/* ── User Auth & Data Persistence Modals ───────────────────────── */}
+      <AuthModal />
+      <SavedPlacesModal
+        onSelectPlace={(place) => {
+          handleFocusPlace({
+            lat: place.lat,
+            lon: place.lon,
+            name: place.name,
+          });
+        }}
+        onAddStop={(stop) => {
+          handleAddCustomWaypoint(stop);
+        }}
+      />
+      <SavedTripsModal
+        onLoadTrip={handleLoadTrip}
       />
 
       {/* ── ORS & Backend Engine Settings Modal ─────────────────────────── */}
